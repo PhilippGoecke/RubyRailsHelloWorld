@@ -52,10 +52,8 @@ RUN yarn init --yes \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
-  && echo '<h1 class="text-primary">Hello <%= @name %>!</h1>' > app/views/welcome/index.html.erb \
+  && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
   && bundle exec rails assets:precompile
-
-WORKDIR /rails/demo
 
 ENV RAILS_ENV=production
 
