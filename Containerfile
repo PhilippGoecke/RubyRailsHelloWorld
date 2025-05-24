@@ -6,11 +6,13 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN rm /bin/sh \
   && ln -s /bin/bash /bin/sh
 
+# install dependencies
 RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends --no-install-suggests ca-certificates git curl libyaml-dev build-essential libssl-dev zlib1g-dev \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
+# add user and set home directory
 ARG USER=rails
 RUN useradd --create-home --shell /bin/bash $USER
 ARG HOME="/home/$USER"
