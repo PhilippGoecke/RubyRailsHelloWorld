@@ -46,10 +46,8 @@ ENV PATH="$HOME/.rbenv/shims:$PATH"
 WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
-RUN yarn init --yes \
-  && yarn add esbuild sass bootstrap bootstrap-icons @popperjs/core \
-  && bundle init \
-  && bundle add rails --version "~> 8.0.1" \
+RUN bundle init \
+  && bundle add rails --version "~> 8.0.2" \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
