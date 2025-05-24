@@ -47,12 +47,12 @@ WORKDIR /rails/demo
 RUN yarn init --yes \
   && yarn add esbuild sass bootstrap bootstrap-icons @popperjs/core \
   && bundle init \
-  && bundle add rails \
+  && bundle add rails --version "~> 8.0.1" \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name]' app/controllers/welcome_controller.rb \
-  && echo '<h1>Hello <%= @name %></h1>' > app/views/welcome/index.html.erb \
+  && echo '<h1 class="text-primary">Hello <%= @name %></h1>' > app/views/welcome/index.html.erb \
   && bundle exec rails assets:precompile
 
 WORKDIR /rails/demo
