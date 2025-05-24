@@ -30,7 +30,7 @@ RUN git clone https://github.com/nvm-sh/nvm.git ~/.nvm \
   && npm install --global yarn \
   && which yarn \
   && yarn --version
-ENV PATH=".nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
+ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
 
 # install Ruby using rbenv
 ENV PATH="$HOME/.rbenv/bin:$PATH"
