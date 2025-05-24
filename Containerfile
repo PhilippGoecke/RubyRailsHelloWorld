@@ -41,9 +41,9 @@ RUN git clone https://github.com/rbenv/rbenv.git ~/.rbenv \
   && rbenv global 3.4.4
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
-WORKDIR /rails/bsdemo
+WORKDIR /rails/demo
 
-# install Rails
+# install Rails and initialize a new Rails app
 RUN yarn init --yes \
   && yarn add esbuild sass bootstrap bootstrap-icons @popperjs/core \
   && bundle init \
@@ -51,9 +51,11 @@ RUN yarn init --yes \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
+  && sed -i '/def index/a \ \ \ \ @name = params[:name]' app/controllers/welcome_controller.rb \
+  && echo '<h1>Hello <%= @name %></h1>' > app/views/welcome/index.html.erb \
   && bundle exec rails assets:precompile
 
-WORKDIR /rails/bsdemo
+WORKDIR /rails/demo
 
 ENV RAILS_ENV=production
 
