@@ -21,7 +21,7 @@ USER $USER
 
 # install Ruby, Node.js, Yarn
 ENV NODE_VERSION=22.16.0
-RUN git clone https://github.com/nvm-sh/nvm.git ~/.nvm \
+RUN git clone https://github.com/nvm-sh/nvm.git --depth 1 ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
   && nvm --version \
@@ -34,7 +34,7 @@ ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
 
 # install Ruby using rbenv
 ENV PATH="$HOME/.rbenv/bin:$PATH"
-RUN git clone https://github.com/rbenv/rbenv.git ~/.rbenv \
+RUN git clone https://github.com/rbenv/rbenv.git --depth 1 ~/.rbenv \
   && ~/.rbenv/bin/rbenv init \
   && rbenv --version \
   && mkdir "$(rbenv root)"/plugins/ \
@@ -42,6 +42,28 @@ RUN git clone https://github.com/rbenv/rbenv.git ~/.rbenv \
   && rbenv install 3.4.4 \
   && rbenv global 3.4.4
 ENV PATH="$HOME/.rbenv/shims:$PATH"
+
+FROM debian:bookworm-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  #&& apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev build-essential zlib1g-dev \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev build-essential \
+  #&& apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy Ruby, Node.js, Yarn and rbenv from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install $HOME/.nvm/versions/node/v*/bin/* $HOME/.local/bin/
 
 WORKDIR /rails/demo
 
