@@ -43,6 +43,7 @@ RUN git clone https://github.com/rbenv/rbenv.git --depth 1 ~/.rbenv \
   && rbenv global 3.4.4
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
+# new stage for Rails app
 FROM debian:bookworm-slim as rails
 
 # install dependencies
