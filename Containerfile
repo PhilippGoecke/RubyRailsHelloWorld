@@ -47,9 +47,7 @@ FROM debian:bookworm-slim as rails
 
 # install dependencies
 RUN apt update && apt upgrade -y \
-  #&& apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev build-essential zlib1g-dev \
-  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev build-essential \
-  #&& apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev build-essential zlib1g-dev \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
