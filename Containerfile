@@ -61,9 +61,10 @@ WORKDIR $HOME
 USER $USER
 
 # copy Ruby, Node.js, Yarn and rbenv from install stage
+COPY --from=install $HOME/.nvm $HOME/.nvm
+ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
 COPY --from=install $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
-COPY --from=install $HOME/.nvm/versions/node/v*/bin/* $HOME/.local/bin/
 
 WORKDIR /rails/demo
 
