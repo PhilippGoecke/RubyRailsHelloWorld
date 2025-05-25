@@ -55,6 +55,29 @@ RUN bundle init \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
   && bundle exec rails assets:precompile
 
+# new stage for Rails app
+FROM debian:bookworm-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
 ENV RAILS_ENV=production
 
 EXPOSE 3000
