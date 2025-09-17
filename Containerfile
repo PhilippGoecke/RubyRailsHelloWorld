@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim as install
+FROM debian:trixie-slim as install
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -56,7 +56,7 @@ RUN bundle init \
   && bundle exec rails assets:precompile
 
 # new stage for Rails app
-FROM debian:bookworm-slim as rails
+FROM debian:trixie-slim as rails
 
 # install dependencies
 RUN apt update && apt upgrade -y \
