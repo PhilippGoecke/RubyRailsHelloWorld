@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=22.16.0
+ENV NODE_VERSION=22.19.0
 RUN git clone https://github.com/nvm-sh/nvm.git --depth 1 ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -39,15 +39,15 @@ RUN git clone https://github.com/rbenv/rbenv.git --depth 1 ~/.rbenv \
   && rbenv --version \
   && mkdir "$(rbenv root)"/plugins/ \
   && git clone https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
-  && rbenv install 3.4.4 \
-  && rbenv global 3.4.4
+  && rbenv install 3.4.5 \
+  && rbenv global 3.4.5
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
-  && bundle add rails --version "~> 8.0.2" \
+  && bundle add rails --version "~> 8.0.2.1" \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
