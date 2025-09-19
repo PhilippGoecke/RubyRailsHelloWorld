@@ -53,7 +53,7 @@ RUN bundle init \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
-  && sed -i '/<bod>/<body><!-- <%= RUBY_VERSION %> <%= Rails.version %> -->' app/views/layouts/application.html.erb \
+  && sed -i '/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> -->' app/views/layouts/application.html.erb \
   && bundle exec rails assets:precompile
 
 # new stage for Rails app
