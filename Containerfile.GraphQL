@@ -49,6 +49,7 @@ WORKDIR /rails/demo
 RUN bundle init \
   && bundle add rails --version "~> 8.0.3" \
   && bundle exec rails new . --force --skip-git --api --database=sqlite3 \
+  # https://graphql-ruby.org/getting_started.html
   && bundle add graphql graphiql-rails \
   && bundle exec rails generate graphql:install \
   && bundle exec rails generate model HighScore game:string score:integer \
