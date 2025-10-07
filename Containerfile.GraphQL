@@ -54,9 +54,9 @@ RUN bundle init \
   && bundle exec rails generate graphql:install \
   && bundle exec rails generate model HighScore game:string score:integer \
   && RAILS_ENV=production bundle exec rails db:migrate \
-  && bundle exec rails generate graphql:mutation_create HighScore \
-  && bundle exec rails generate graphql:mutation_update HighScore \
-  && bundle exec rails generate graphql:mutation_delete HighScore \
+  && RAILS_ENV=production bundle exec rails generate graphql:mutation_create HighScore \
+  && RAILS_ENV=production bundle exec rails generate graphql:mutation_update HighScore \
+  && RAILS_ENV=production bundle exec rails generate graphql:mutation_delete HighScore \
   && bundle exec rails generate graphql:mutation TestMutation \
   && bundle exec rails generate model Post title:string rating:integer comments:text \
   && RAILS_ENV=production bundle exec rails db:migrate \
