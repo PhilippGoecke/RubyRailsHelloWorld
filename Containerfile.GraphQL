@@ -19,19 +19,6 @@ ARG HOME="/home/$USER"
 WORKDIR $HOME
 USER $USER
 
-# install Ruby, Node.js, Yarn
-ENV NODE_VERSION=22.19.0
-RUN git clone https://github.com/nvm-sh/nvm.git --depth 1 ~/.nvm \
-  && cd .nvm \
-  && . $HOME/.nvm/nvm.sh \
-  && nvm --version \
-  && nvm install $NODE_VERSION \
-  && npm --version \
-  && npm install --global yarn \
-  && which yarn \
-  && yarn --version
-ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
-
 # install Ruby using rbenv
 ENV PATH="$HOME/.rbenv/bin:$PATH"
 RUN git clone https://github.com/rbenv/rbenv.git --depth 1 ~/.rbenv \
@@ -52,13 +39,13 @@ RUN bundle init \
   # https://graphql-ruby.org/getting_started.html
   && bundle add graphql graphiql-rails \
   && bundle exec rails generate graphql:install \
-  && bundle exec rails generate model HighScore game:string score:integer \
-  && RAILS_ENV=production bundle exec rails db:migrate \
-  && RAILS_ENV=production bundle exec rails generate graphql:object HighScore game:String score:Int \
-  && RAILS_ENV=production bundle exec rails generate graphql:mutation_create HighScore \
-  && RAILS_ENV=production bundle exec rails generate graphql:mutation_update HighScore \
-  && RAILS_ENV=production bundle exec rails generate graphql:mutation_delete HighScore \
-  && bundle exec rails generate graphql:mutation TestMutation \
+  #&& bundle exec rails generate model HighScore game:string score:integer \
+  #&& RAILS_ENV=production bundle exec rails db:migrate \
+  #&& RAILS_ENV=production bundle exec rails generate graphql:object HighScore game:String score:Int \
+  #&& RAILS_ENV=production bundle exec rails generate graphql:mutation_create HighScore \
+  #&& RAILS_ENV=production bundle exec rails generate graphql:mutation_update HighScore \
+  #&& RAILS_ENV=production bundle exec rails generate graphql:mutation_delete HighScore \
+  #&& bundle exec rails generate graphql:mutation TestMutation \
   && bundle exec rails generate model Post title:string rating:integer comments:text \
   && RAILS_ENV=production bundle exec rails db:migrate \
   && RAILS_ENV=production bundle exec rails generate graphql:object Post title:String rating:Int comments:Text \
