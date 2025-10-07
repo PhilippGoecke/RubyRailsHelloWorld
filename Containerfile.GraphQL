@@ -60,7 +60,7 @@ RUN bundle init \
   && bundle exec rails generate graphql:mutation TestMutation \
   && bundle exec rails generate model Post title:string rating:integer comments:text \
   && RAILS_ENV=production bundle exec rails db:migrate \
-  && bundle exec rails generate graphql:object Post title:String rating:Int comments:Text \
+  && RAILS_ENV=production bundle exec rails generate graphql:object Post title:String rating:Int comments:Text \
   && sed -i 's/# root/mount GraphiQL::Rails::Engine, at: "\/graphiql", graphql_path: "\/graphql"\n  # root/g' config/routes.rb \
   #&& bundle add sprocket-rails \
   && sed -i '1s/^/#require "sprockets\/railtie"\n/' config/application.rb \
