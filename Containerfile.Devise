@@ -54,6 +54,11 @@ RUN bundle add devise \
   && bundle exec rails generate devise:install \
   && bundle exec rails generate devise Account \
   && RAILS_ENV=production bundle exec rails db:migrate
+# OTP
+RUN bundle add devise-otp \
+  && bundle exec rails g devise_otp:install \
+  && bundle exec rails g devise_otp Account \
+  && RAILS_ENV=production bundle exec rails db:migrate
 # Bootstrap
 RUN mkdir app/views/application/
 COPY nav/_navigation.html.erb app/views/application/
