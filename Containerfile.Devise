@@ -59,7 +59,7 @@ RUN mkdir app/views/application/
 COPY nav/_navigation.html.erb app/views/application/
 COPY nav/navigation.css app/assets/stylesheets/
 RUN sed -i "s/<body>/<body>\n  <main class=\"d-flex flex-nowrap\">\n    <%= render 'navigation' %>/g" app/views/layouts/application.html.erb \
-  && sed -i 's/<%= yield %>/<div class="container-fluid">\n      <%= yield %>\n    <\/div>\n  <\/main>/g' app/views/layouts/application.html.erb
+  && sed -i 's/<%= yield %>/<div class="container-fluid overflow-auto">\n      <%= yield %>\n    <\/div>\n  <\/main>/g' app/views/layouts/application.html.erb
 RUN bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
