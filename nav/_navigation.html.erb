@@ -26,6 +26,7 @@
     <ul class="dropdown-menu text-small shadow">
 <% if account_signed_in? %>
       <li><%= link_to "Profile", edit_account_registration_path, class: "dropdown-item" %></li>
+      <li><%= link_to "OTP", account_otp_token_path, class: "dropdown-item" %></li>
       <li><a class="dropdown-item" href="#">Settings</a></li>
       <li><%= link_to "Cancel Account", account_registration_path, data: { turbo_confirm: "Are you sure?", turbo_method: :delete }, method: :delete, class: "dropdown-item" %></li>
 <% end %>
