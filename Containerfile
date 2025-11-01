@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=22.20.0
+ENV NODE_VERSION=24.11.0
 RUN git clone https://github.com/nvm-sh/nvm.git --depth 1 ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -47,7 +47,7 @@ WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
-  && bundle add rails --version "~> 8.0.3" \
+  && bundle add rails --version "~> 8.0.4" \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
@@ -83,6 +83,6 @@ ENV RAILS_ENV=production
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=35s --timeout=4s CMD curl -f http://localhost:3000/up || exit 1
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:3000/up || exit 1
 
 CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
