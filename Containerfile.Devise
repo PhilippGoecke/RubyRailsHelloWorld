@@ -21,7 +21,7 @@ USER $USER
 
 # install Ruby, Node.js, Yarn
 ENV NODE_VERSION=24.12.0
-RUN git clone https://github.com/nvm-sh/nvm.git --depth 1 ~/.nvm \
+RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
   && nvm --version \
@@ -34,13 +34,13 @@ ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
 
 # install Ruby using rbenv
 ENV PATH="$HOME/.rbenv/bin:$PATH"
-RUN git clone https://github.com/rbenv/rbenv.git --depth 1 ~/.rbenv \
+RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && ~/.rbenv/bin/rbenv init \
   && rbenv --version \
   && mkdir "$(rbenv root)"/plugins/ \
-  && git clone https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
-  && rbenv install 3.4.8 \
-  && rbenv global 3.4.8
+  && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
+  && rbenv install 4.0.0 \
+  && rbenv global 4.0.0
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/demo
