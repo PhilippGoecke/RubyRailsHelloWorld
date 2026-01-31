@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.12.0
+ENV NODE_VERSION=24.13.0
 RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
