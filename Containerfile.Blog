@@ -65,7 +65,7 @@ FROM debian:trixie-slim as rails
 
 # install dependencies
 RUN apt update && apt upgrade -y \
-  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev libmariadb-dev \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev libmariadb-dev openssl \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
@@ -83,10 +83,13 @@ COPY --from=install /rails/demo /rails/demo
 
 WORKDIR /rails/demo
 
+RUN mkdir config/certificates \
+  && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -days 365
+
 ENV RAILS_ENV=production
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:3000/up || exit 1
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --insecure --fail https://localhost:3000/up || exit 1
 
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+CMD ["bundle", "exec", "rails", "server", "-b", "ssl://0.0.0.0:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt", "-p", "3000"]
