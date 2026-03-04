@@ -51,7 +51,7 @@ RUN bundle init \
   && bundle exec rails new . --force --skip-git --database=mysql --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && sed -i 's/username: .*/username: <%= ENV.fetch("DB_USERNAME") { "rails" } %>/g' config/database.yml \
   && sed -i 's/password: .*/password: <%= ENV.fetch("DB_PASSWORD") { "secret" } %>/g' config/database.yml \
-  && sed -i 's/database: .*/database: <%= ENV.fetch("DB_NAME") { "railsapp" } %>\nhost: <%= ENV.fetch("DB_HOST") { "localhost" } %>\nport: <%= ENV.fetch("DB_PORT") { 3306 } %>/g' config/database.yml \
+  && sed -i 's/database: .*/database: <%= ENV.fetch("DB_NAME") { "railsapp" } %>\n    host: <%= ENV.fetch("DB_HOST") { "localhost" } %>\n    port: <%= ENV.fetch("DB_PORT") { 3306 } %>/g' config/database.yml \
   && bundle exec rails generate scaffold blog title:string content:text \
   && sed -i 's/# root/root to: "blogs#index"\n  # root/g' config/routes.rb \
   && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> -->/g' app/views/layouts/application.html.erb \
