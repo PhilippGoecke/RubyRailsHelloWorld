@@ -1,3 +1,4 @@
+#DB_HOST=host.containers.internal
 DB_HOST=localhost
 DB_USERNAME=rails
 DB_PASSWORD=secret
