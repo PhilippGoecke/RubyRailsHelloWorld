@@ -40,7 +40,8 @@ RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && mkdir "$(rbenv root)"/plugins/ \
   && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
   && rbenv install 4.0.2 \
-  && rbenv global 4.0.2
+  && rbenv global 4.0.2 \
+  && bundle update --bundler
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/demo
