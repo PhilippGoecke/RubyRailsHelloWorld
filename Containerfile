@@ -47,8 +47,8 @@ WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
-  && bundle update --bundler \
   && bundle add rails --version "~> 8.1.3" \
+  && bundle update --bundler \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
