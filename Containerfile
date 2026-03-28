@@ -40,14 +40,14 @@ RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && mkdir "$(rbenv root)"/plugins/ \
   && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
   && rbenv install 4.0.2 \
-  && rbenv global 4.0.2 \
-  && bundle update --bundler
+  && rbenv global 4.0.2
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
+  && bundle update --bundler \
   && bundle add rails --version "~> 8.1.3" \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && bundle exec rails generate controller welcome index \
