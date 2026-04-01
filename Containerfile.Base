@@ -45,7 +45,7 @@ ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/
 
-RUN	ruby --version; \
+RUN ruby --version; \
   gem --version; \
   bundle --version
 
