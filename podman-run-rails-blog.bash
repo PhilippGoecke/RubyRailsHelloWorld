@@ -1,3 +1,10 @@
+if ! podman image ls | grep rails | grep -q base; then
+  echo "Build Base Image ..."
+  podman build --no-cache --rm --file Containerfile.Base --tag rails:base .
+else
+  echo "Base Image present ..."
+fi
+
 #DB_HOST=host.containers.internal
 DB_HOST=localhost
 DB_USERNAME=rails
