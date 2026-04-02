@@ -1,47 +1,4 @@
-FROM debian:trixie-slim as install
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-#SHELL ["/bin/bash", "-c"]
-RUN rm /bin/sh \
-  && ln -s /bin/bash /bin/sh
-
-# install dependencies
-RUN apt update && apt upgrade -y \
-  && apt install -y --no-install-recommends --no-install-suggests ca-certificates git curl libyaml-dev build-essential libssl-dev zlib1g-dev \
-  && rm -rf "/var/lib/apt/lists/*" \
-  && rm -rf /var/cache/apt/archives
-
-# add user and set home directory
-ARG USER=rails
-RUN useradd --create-home --shell /bin/bash $USER
-ARG HOME="/home/$USER"
-WORKDIR $HOME
-USER $USER
-
-# install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.14.1
-RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
-  && cd .nvm \
-  && . $HOME/.nvm/nvm.sh \
-  && nvm --version \
-  && nvm install $NODE_VERSION \
-  && npm --version \
-  && npm install --global yarn \
-  && which yarn \
-  && yarn --version
-ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
-
-# install Ruby using rbenv
-ENV PATH="$HOME/.rbenv/bin:$PATH"
-RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
-  && ~/.rbenv/bin/rbenv init \
-  && rbenv --version \
-  && mkdir "$(rbenv root)"/plugins/ \
-  && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
-  && rbenv install 4.0.2 \
-  && rbenv global 4.0.2
-ENV PATH="$HOME/.rbenv/shims:$PATH"
+FROM rails:base as install
 
 WORKDIR /rails/demo
 
