@@ -1,0 +1,304 @@
+FROM debian:trixie-slim as install
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+#SHELL ["/bin/bash", "-c"]
+RUN rm /bin/sh \
+  && ln -s /bin/bash /bin/sh
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests ca-certificates git curl libyaml-dev build-essential libssl-dev zlib1g-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# install Ruby, Node.js, Yarn
+ENV NODE_VERSION=24.14.1
+RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
+  && cd .nvm \
+  && . $HOME/.nvm/nvm.sh \
+  && nvm --version \
+  && nvm install $NODE_VERSION \
+  && npm --version \
+  && npm install --global yarn \
+  && which yarn \
+  && yarn --version
+ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
+
+# install Ruby using rbenv
+ENV PATH="$HOME/.rbenv/bin:$PATH"
+RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
+  && ~/.rbenv/bin/rbenv init \
+  && rbenv --version \
+  && mkdir "$(rbenv root)"/plugins/ \
+  && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
+  && rbenv install 4.0.2 \
+  && rbenv global 4.0.2
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+
+WORKDIR /rails/demo
+
+# install Rails and scaffold a Turbo showcase app
+RUN bundle init \
+  && bundle add rails --version "~> 8.1.3" \
+  && bundle update --bundler \
+  && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft
+
+# generate models and controllers
+RUN bundle exec rails generate scaffold Message body:text \
+  && bundle exec rails generate controller dashboard index \
+  && bundle exec rails db:migrate
+
+# --- routes ---
+RUN sed -i 's/# root/root to: "dashboard#index"\n  # root/g' config/routes.rb
+
+# --- dashboard controller (Turbo Streams demo) ---
+RUN cat > app/controllers/dashboard_controller.rb << 'RUBY'
+class DashboardController < ApplicationController
+  def index
+    @messages = Message.order(created_at: :desc)
+    @message = Message.new
+  end
+end
+RUBY
+
+# --- messages controller with Turbo Streams responses ---
+RUN cat > app/controllers/messages_controller.rb << 'RUBY'
+class MessagesController < ApplicationController
+  before_action :set_message, only: %i[show edit update destroy]
+
+  def index
+    @messages = Message.order(created_at: :desc)
+    @message = Message.new
+  end
+
+  def show; end
+
+  def new
+    @message = Message.new
+  end
+
+  def edit; end
+
+  def create
+    @message = Message.new(message_params)
+    respond_to do |format|
+      if @message.save
+        format.turbo_stream
+        format.html { redirect_to root_path, notice: "Message created." }
+      else
+        format.turbo_stream { render turbo_stream: turbo_stream.replace("new_message", partial: "messages/form", locals: { message: @message }) }
+        format.html { render :new, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  def update
+    respond_to do |format|
+      if @message.update(message_params)
+        format.turbo_stream
+        format.html { redirect_to root_path, notice: "Message updated." }
+      else
+        format.html { render :edit, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  def destroy
+    @message.destroy
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to root_path, notice: "Message deleted." }
+    end
+  end
+
+  private
+
+  def set_message
+    @message = Message.find(params.expect(:id))
+  end
+
+  def message_params
+    params.expect(message: [:body])
+  end
+end
+RUBY
+
+# --- Turbo Stream templates ---
+RUN mkdir -p app/views/messages
+
+# create.turbo_stream.erb — prepend new message + reset form
+RUN cat > app/views/messages/create.turbo_stream.erb << 'ERB'
+<%= turbo_stream.prepend "messages" do %>
+  <%= render partial: "messages/message", locals: { message: @message } %>
+<% end %>
+<%= turbo_stream.replace "new_message" do %>
+  <%= render partial: "messages/form", locals: { message: Message.new } %>
+<% end %>
+<%= turbo_stream.update "message_count" do %>
+  <%= Message.count %>
+<% end %>
+ERB
+
+# update.turbo_stream.erb — replace edited message in-place
+RUN cat > app/views/messages/update.turbo_stream.erb << 'ERB'
+<%= turbo_stream.replace dom_id(@message) do %>
+  <%= render partial: "messages/message", locals: { message: @message } %>
+<% end %>
+ERB
+
+# destroy.turbo_stream.erb — remove message from DOM
+RUN cat > app/views/messages/destroy.turbo_stream.erb << 'ERB'
+<%= turbo_stream.remove dom_id(@message) %>
+<%= turbo_stream.update "message_count" do %>
+  <%= Message.count %>
+<% end %>
+ERB
+
+# --- partials ---
+# _message.html.erb — single message with Turbo Frame for inline edit
+RUN cat > app/views/messages/_message.html.erb << 'ERB'
+<%= turbo_frame_tag dom_id(message) do %>
+  <div class="card mb-2 shadow-sm">
+    <div class="card-body d-flex justify-content-between align-items-start">
+      <div>
+        <p class="mb-1"><%= message.body %></p>
+        <small class="text-muted"><%= time_ago_in_words(message.created_at) %> ago</small>
+      </div>
+      <div class="btn-group btn-group-sm">
+        <%= link_to "Edit", edit_message_path(message), class: "btn btn-outline-primary btn-sm" %>
+        <%= button_to "Delete", message_path(message), method: :delete, class: "btn btn-outline-danger btn-sm",
+              form: { data: { turbo_confirm: "Delete this message?" } } %>
+      </div>
+    </div>
+  </div>
+<% end %>
+ERB
+
+# _form.html.erb — message form (used for new and edit)
+RUN cat > app/views/messages/_form.html.erb << 'ERB'
+<%= form_with(model: message, id: "new_message", class: "mb-4") do |form| %>
+  <% if message.errors.any? %>
+    <div class="alert alert-danger">
+      <% message.errors.full_messages.each do |msg| %>
+        <p class="mb-0"><%= msg %></p>
+      <% end %>
+    </div>
+  <% end %>
+  <div class="input-group">
+    <%= form.text_area :body, class: "form-control", placeholder: "Type a message...", rows: 1,
+        style: "resize: none;", required: true %>
+    <%= form.submit message.persisted? ? "Update" : "Send", class: "btn btn-primary" %>
+  </div>
+<% end %>
+ERB
+
+# edit.html.erb — wraps form in a Turbo Frame for inline editing
+RUN cat > app/views/messages/edit.html.erb << 'ERB'
+<%= turbo_frame_tag dom_id(@message) do %>
+  <div class="card mb-2 border-primary">
+    <div class="card-body">
+      <%= render partial: "messages/form", locals: { message: @message } %>
+      <div class="mt-1">
+        <%= link_to "Cancel", root_path, class: "btn btn-sm btn-outline-secondary" %>
+      </div>
+    </div>
+  </div>
+<% end %>
+ERB
+
+# --- dashboard view (main page) ---
+RUN cat > app/views/dashboard/index.html.erb << 'ERB'
+<div class="container py-5" style="max-width: 680px;">
+  <div class="text-center mb-4">
+    <h1 class="text-primary">Turbo Rails Demo</h1>
+    <p class="text-muted">
+      Ruby <%= RUBY_VERSION %> &middot; Rails <%= Rails.version %> &middot;
+      Turbo Drive + Frames + Streams
+    </p>
+    <span class="badge bg-secondary">
+      <span id="message_count"><%= @messages.count %></span> messages
+    </span>
+  </div>
+
+  <h5 class="mb-3">New Message <small class="text-muted">(Turbo Stream: prepend)</small></h5>
+  <%= render partial: "messages/form", locals: { message: @message } %>
+
+  <h5 class="mb-3">Messages <small class="text-muted">(Turbo Frames: inline edit)</small></h5>
+  <div id="messages">
+    <%= render partial: "messages/message", collection: @messages, as: :message %>
+  </div>
+
+  <% if @messages.empty? %>
+    <p class="text-center text-muted mt-3">No messages yet. Send one above!</p>
+  <% end %>
+
+  <hr>
+  <div class="text-center">
+    <small class="text-muted">
+      <strong>Turbo Drive:</strong> all navigation is SPA-like — no full page reloads.<br>
+      <strong>Turbo Frames:</strong> click "Edit" to edit a message inline without leaving the page.<br>
+      <strong>Turbo Streams:</strong> creating &amp; deleting messages updates the DOM via stream responses.
+    </small>
+  </div>
+</div>
+ERB
+
+# --- add version comment to layout ---
+RUN sed -i 's/<body>/<body>\n  <!-- Ruby <%= RUBY_VERSION %> Rails <%= Rails.version %> Bundler <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb
+
+# --- add a model validation ---
+RUN sed -i '/class Message < ApplicationRecord/a \ \ validates :body, presence: true, length: { maximum: 500 }' app/models/message.rb
+
+# --- seed some demo messages ---
+RUN cat > db/seeds.rb << 'RUBY'
+["Welcome to the Turbo Rails demo!",
+ "Try creating a new message — it appears instantly via Turbo Streams.",
+ "Click Edit on any message — Turbo Frames swap the content inline.",
+ "Delete a message — Turbo Streams remove it from the page without a reload.",
+ "All navigation uses Turbo Drive — notice there are no full page loads!"].each do |body|
+  Message.create!(body: body)
+end
+RUBY
+RUN RAILS_ENV=production SECRET_KEY_BASE=placeholder bundle exec rails db:seed
+
+# precompile assets
+RUN bundle exec rails assets:precompile
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
+ENV RAILS_ENV=production
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD ruby -e "require 'net/http'; Net::HTTP.get(URI('http://localhost:3000/up'))" || exit 1
+
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
