@@ -1,0 +1,327 @@
+FROM rails:base as install
+
+WORKDIR /rails/demo
+
+# install Rails and scaffold a Turbo showcase app
+RUN bundle init \
+  && bundle add rails --version "~> 8.1.3" \
+  && bundle update --bundler \
+  && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft
+
+# generate models and controllers
+RUN bundle exec rails generate scaffold Message body:text \
+  && bundle exec rails generate controller dashboard index \
+  && bundle exec rails db:migrate
+
+# --- routes ---
+RUN sed -i 's/# root/root to: "dashboard#index"\n  # root/g' config/routes.rb
+
+# --- dashboard controller ---
+COPY --chown=rails <<'RUBY' app/controllers/dashboard_controller.rb
+class DashboardController < ApplicationController
+  def index
+  end
+end
+RUBY
+
+# --- dashboard view: Stimulus showcase ---
+COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
+<div class="container py-5" style="max-width: 780px;">
+  <h1 class="text-primary text-center mb-2">Hotwire Stimulus Demo</h1>
+  <p class="text-muted text-center mb-5">
+    Ruby <%= RUBY_VERSION %> &middot; Rails <%= Rails.version %> &middot; Stimulus <%= Stimulus::VERSION rescue "3.x" %><br>
+    Controllers &middot; Actions &middot; Targets &middot; Values &middot; Classes &middot; Outlets &middot; Lifecycle
+  </p>
+
+  <%# ── 1. Controllers, Actions & Targets ── %>
+  <div class="card mb-4 shadow-sm" data-controller="greeting">
+    <div class="card-header"><strong>1. Controllers, Actions &amp; Targets</strong></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>data-controller</code>, <code>data-action</code>, <code>data-greeting-target</code>
+      </p>
+      <div class="input-group mb-3">
+        <input type="text" class="form-control" placeholder="Enter your name"
+               data-greeting-target="nameInput"
+               data-action="keyup.enter->greeting#greet">
+        <button class="btn btn-primary" data-action="click->greeting#greet">Greet</button>
+      </div>
+      <p class="fs-5" data-greeting-target="output">Hello, World!</p>
+    </div>
+  </div>
+
+  <%# ── 2. Values (typed reactive state) ── %>
+  <div class="card mb-4 shadow-sm"
+       data-controller="counter"
+       data-counter-count-value="0"
+       data-counter-step-value="1">
+    <div class="card-header"><strong>2. Values</strong> <small class="text-muted">— typed reactive state with change callbacks</small></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>countValue</code> &amp; <code>stepValue</code> with <code>countValueChanged()</code> callback
+      </p>
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <button class="btn btn-outline-danger" data-action="click->counter#decrement">&minus;</button>
+        <span class="fs-3 fw-bold" data-counter-target="display">0</span>
+        <button class="btn btn-outline-success" data-action="click->counter#increment">+</button>
+      </div>
+      <div class="input-group input-group-sm" style="max-width: 220px;">
+        <span class="input-group-text">Step size</span>
+        <input type="number" class="form-control" value="1" min="1" max="100"
+               data-action="input->counter#updateStep">
+      </div>
+    </div>
+  </div>
+
+  <%# ── 3. Classes API ── %>
+  <div class="card mb-4 shadow-sm"
+       data-controller="toggle"
+       data-toggle-active-class="bg-warning-subtle">
+    <div class="card-header"><strong>3. Classes</strong> <small class="text-muted">— CSS class from HTML, not hard-coded</small></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>data-toggle-active-class="bg-warning-subtle"</code> &mdash; swap to any class you like
+      </p>
+      <button class="btn btn-outline-warning mb-3" data-action="click->toggle#toggle">Toggle Highlight</button>
+      <div class="p-3 border rounded" data-toggle-target="box">
+        This box gets the configured class toggled on/off via the Classes API.
+      </div>
+    </div>
+  </div>
+
+  <%# ── 4. Lifecycle Callbacks ── %>
+  <div class="card mb-4 shadow-sm" data-controller="lifecycle">
+    <div class="card-header"><strong>4. Lifecycle Callbacks</strong></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>connect()</code> starts a timer, <code>disconnect()</code> clears it
+      </p>
+      <p>Uptime: <strong data-lifecycle-target="timer">0</strong> seconds</p>
+      <div class="bg-dark text-success font-monospace p-2 rounded small" style="max-height:120px; overflow-y:auto;"
+           data-lifecycle-target="log"></div>
+    </div>
+  </div>
+
+  <%# ── 5. Outlets (cross-controller communication) ── %>
+  <div class="card mb-4 shadow-sm"
+       data-controller="commander"
+       data-commander-counter-outlet="[data-controller='counter']"
+       data-commander-greeting-outlet="[data-controller='greeting']">
+    <div class="card-header"><strong>5. Outlets</strong> <small class="text-muted">— cross-controller communication</small></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        References Counter &amp; Greeting controllers via <code>data-commander-counter-outlet</code>
+      </p>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-info" data-action="click->commander#resetCounter">Reset Counter to 0</button>
+        <button class="btn btn-info" data-action="click->commander#setCounter100">Set Counter to 100</button>
+        <button class="btn btn-info" data-action="click->commander#greetStimulus">Greet &quot;Stimulus&quot;</button>
+      </div>
+      <p class="mt-2 text-muted small" data-commander-target="status"></p>
+    </div>
+  </div>
+
+  <%# ── 6. Action Parameters & Multiple Events ── %>
+  <div class="card mb-4 shadow-sm" data-controller="clipboard">
+    <div class="card-header"><strong>6. Action Parameters &amp; Multiple Events</strong></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>data-clipboard-text-param</code> passes data; <code>focus-&gt;</code> and <code>blur-&gt;</code> on one element
+      </p>
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        <button class="btn btn-outline-primary"
+                data-action="click->clipboard#copy"
+                data-clipboard-text-param="Hello from Stimulus!">
+          Copy &quot;Hello from Stimulus!&quot;
+        </button>
+        <button class="btn btn-outline-primary"
+                data-action="click->clipboard#copy"
+                data-clipboard-text-param="Hotwire is awesome">
+          Copy &quot;Hotwire is awesome&quot;
+        </button>
+      </div>
+      <input type="text" class="form-control mb-2" readonly
+             data-clipboard-target="output" value="(copied text appears here)"
+             data-action="focus->clipboard#selectAll blur->clipboard#deselect">
+      <p class="text-muted small" data-clipboard-target="status"></p>
+    </div>
+  </div>
+
+</div>
+ERB
+
+# --- Stimulus controllers via esbuild entry point ---
+COPY --chown=rails <<'JS' app/javascript/controllers/greeting_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 1. Controllers, Actions & Targets
+export default class extends Controller {
+  static targets = ["nameInput", "output"]
+
+  greet() {
+    const name = this.nameInputTarget.value.trim() || "World"
+    this.outputTarget.textContent = `Hello, ${name}!`
+  }
+}
+JS
+
+COPY --chown=rails <<'JS' app/javascript/controllers/counter_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 2. Values — typed reactive state with change callbacks
+export default class extends Controller {
+  static targets = ["display"]
+  static values = { count: Number, step: Number }
+
+  increment() { this.countValue += this.stepValue }
+  decrement() { this.countValue -= this.stepValue }
+  updateStep(e) { this.stepValue = parseInt(e.target.value) || 1 }
+
+  countValueChanged() {
+    this.displayTarget.textContent = this.countValue
+  }
+}
+JS
+
+COPY --chown=rails <<'JS' app/javascript/controllers/toggle_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 3. Classes API — CSS class name from HTML, not hard-coded
+export default class extends Controller {
+  static targets = ["box"]
+  static classes = ["active"]
+
+  toggle() {
+    this.boxTarget.classList.toggle(this.activeClass)
+  }
+}
+JS
+
+COPY --chown=rails <<'JS' app/javascript/controllers/lifecycle_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 4. Lifecycle Callbacks — connect() / disconnect()
+export default class extends Controller {
+  static targets = ["timer", "log"]
+
+  connect() {
+    this.seconds = 0
+    this.log("connect() — controller attached to DOM")
+    this.interval = setInterval(() => {
+      this.seconds++
+      this.timerTarget.textContent = this.seconds
+    }, 1000)
+  }
+
+  disconnect() {
+    clearInterval(this.interval)
+  }
+
+  log(message) {
+    const line = document.createElement("div")
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`
+    this.logTarget.appendChild(line)
+    this.logTarget.scrollTop = this.logTarget.scrollHeight
+  }
+}
+JS
+
+COPY --chown=rails <<'JS' app/javascript/controllers/commander_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 5. Outlets — cross-controller communication
+export default class extends Controller {
+  static targets = ["status"]
+  static outlets = ["counter", "greeting"]
+
+  resetCounter() {
+    this.counterOutlet.countValue = 0
+    this.statusTarget.textContent = "Counter reset to 0 via outlet"
+  }
+
+  setCounter100() {
+    this.counterOutlet.countValue = 100
+    this.statusTarget.textContent = "Counter set to 100 via outlet"
+  }
+
+  greetStimulus() {
+    this.greetingOutlet.nameInputTarget.value = "Stimulus"
+    this.greetingOutlet.greet()
+    this.statusTarget.textContent = "Called greet() on Greeting controller via outlet"
+  }
+}
+JS
+
+COPY --chown=rails <<'JS' app/javascript/controllers/clipboard_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+// 6. Action Parameters & Multiple Events
+export default class extends Controller {
+  static targets = ["output", "status"]
+
+  copy({ params: { text } }) {
+    this.outputTarget.value = text
+    navigator.clipboard?.writeText(text)
+    this.statusTarget.textContent = `Copied: "${text}"`
+  }
+
+  selectAll() { this.outputTarget.select() }
+  deselect() { window.getSelection()?.removeAllRanges() }
+}
+JS
+
+# register all controllers in the Stimulus index
+COPY --chown=rails <<'JS' app/javascript/controllers/index.js
+import { application } from "controllers/application"
+
+import GreetingController from "controllers/greeting_controller"
+application.register("greeting", GreetingController)
+
+import CounterController from "controllers/counter_controller"
+application.register("counter", CounterController)
+
+import ToggleController from "controllers/toggle_controller"
+application.register("toggle", ToggleController)
+
+import LifecycleController from "controllers/lifecycle_controller"
+application.register("lifecycle", LifecycleController)
+
+import CommanderController from "controllers/commander_controller"
+application.register("commander", CommanderController)
+
+import ClipboardController from "controllers/clipboard_controller"
+application.register("clipboard", ClipboardController)
+JS
+# build JS and precompile assets
+RUN bundle exec rails assets:precompile
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
+ENV RAILS_ENV=production
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD ruby -e "require 'net/http'; Net::HTTP.get(URI('http://localhost:3000/up'))" || exit 1
+
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
