@@ -272,24 +272,24 @@ JS
 
 # register all controllers in the Stimulus index
 COPY --chown=rails <<'JS' app/javascript/controllers/index.js
-import { application } from "controllers/application"
+import { application } from "./application"
 
-import GreetingController from "controllers/greeting_controller"
+import GreetingController from "./greeting_controller"
 application.register("greeting", GreetingController)
 
-import CounterController from "controllers/counter_controller"
+import CounterController from "./counter_controller"
 application.register("counter", CounterController)
 
-import ToggleController from "controllers/toggle_controller"
+import ToggleController from "./toggle_controller"
 application.register("toggle", ToggleController)
 
-import LifecycleController from "controllers/lifecycle_controller"
+import LifecycleController from "./lifecycle_controller"
 application.register("lifecycle", LifecycleController)
 
-import CommanderController from "controllers/commander_controller"
+import CommanderController from "./commander_controller"
 application.register("commander", CommanderController)
 
-import ClipboardController from "controllers/clipboard_controller"
+import ClipboardController from "./clipboard_controller"
 application.register("clipboard", ClipboardController)
 JS
 # build JS and precompile assets
