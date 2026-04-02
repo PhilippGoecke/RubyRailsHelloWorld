@@ -17,7 +17,7 @@ RUN bundle exec rails generate scaffold Message body:text \
 RUN sed -i 's/# root/root to: "dashboard#index"\n  # root/g' config/routes.rb
 
 # --- dashboard controller (Turbo Streams demo) ---
-RUN cat > app/controllers/dashboard_controller.rb << 'RUBY'
+COPY --chown=rails <<'RUBY' app/controllers/dashboard_controller.rb
 class DashboardController < ApplicationController
   def index
     @messages = Message.order(created_at: :desc)
@@ -27,7 +27,7 @@ end
 RUBY
 
 # --- messages controller with Turbo Streams responses ---
-RUN cat > app/controllers/messages_controller.rb << 'RUBY'
+COPY --chown=rails <<'RUBY' app/controllers/messages_controller.rb
 class MessagesController < ApplicationController
   before_action :set_message, only: %i[show edit update destroy]
 
@@ -89,10 +89,9 @@ end
 RUBY
 
 # --- Turbo Stream templates ---
-RUN mkdir -p app/views/messages
 
 # create.turbo_stream.erb — prepend new message + reset form
-RUN cat > app/views/messages/create.turbo_stream.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/create.turbo_stream.erb
 <%= turbo_stream.prepend "messages" do %>
   <%= render partial: "messages/message", locals: { message: @message } %>
 <% end %>
@@ -105,14 +104,14 @@ RUN cat > app/views/messages/create.turbo_stream.erb << 'ERB'
 ERB
 
 # update.turbo_stream.erb — replace edited message in-place
-RUN cat > app/views/messages/update.turbo_stream.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/update.turbo_stream.erb
 <%= turbo_stream.replace dom_id(@message) do %>
   <%= render partial: "messages/message", locals: { message: @message } %>
 <% end %>
 ERB
 
 # destroy.turbo_stream.erb — remove message from DOM
-RUN cat > app/views/messages/destroy.turbo_stream.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/destroy.turbo_stream.erb
 <%= turbo_stream.remove dom_id(@message) %>
 <%= turbo_stream.update "message_count" do %>
   <%= Message.count %>
@@ -121,7 +120,7 @@ ERB
 
 # --- partials ---
 # _message.html.erb — single message with Turbo Frame for inline edit
-RUN cat > app/views/messages/_message.html.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/_message.html.erb
 <%= turbo_frame_tag dom_id(message) do %>
   <div class="card mb-2 shadow-sm">
     <div class="card-body d-flex justify-content-between align-items-start">
@@ -140,7 +139,7 @@ RUN cat > app/views/messages/_message.html.erb << 'ERB'
 ERB
 
 # _form.html.erb — message form (used for new and edit)
-RUN cat > app/views/messages/_form.html.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/_form.html.erb
 <%= form_with(model: message, id: "new_message", class: "mb-4") do |form| %>
   <% if message.errors.any? %>
     <div class="alert alert-danger">
@@ -158,7 +157,7 @@ RUN cat > app/views/messages/_form.html.erb << 'ERB'
 ERB
 
 # edit.html.erb — wraps form in a Turbo Frame for inline editing
-RUN cat > app/views/messages/edit.html.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/messages/edit.html.erb
 <%= turbo_frame_tag dom_id(@message) do %>
   <div class="card mb-2 border-primary">
     <div class="card-body">
@@ -172,7 +171,7 @@ RUN cat > app/views/messages/edit.html.erb << 'ERB'
 ERB
 
 # --- dashboard view (main page) ---
-RUN cat > app/views/dashboard/index.html.erb << 'ERB'
+COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
 <div class="container py-5" style="max-width: 680px;">
   <div class="text-center mb-4">
     <h1 class="text-primary">Turbo Rails Demo</h1>
@@ -208,14 +207,12 @@ RUN cat > app/views/dashboard/index.html.erb << 'ERB'
 </div>
 ERB
 
-# --- add version comment to layout ---
-RUN sed -i 's/<body>/<body>\n  <!-- Ruby <%= RUBY_VERSION %> Rails <%= Rails.version %> Bundler <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb
-
-# --- add a model validation ---
-RUN sed -i '/class Message < ApplicationRecord/a \ \ validates :body, presence: true, length: { maximum: 500 }' app/models/message.rb
+# --- add version comment to layout + model validation ---
+RUN sed -i 's/<body>/<body>\n  <!-- Ruby <%= RUBY_VERSION %> Rails <%= Rails.version %> Bundler <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb \
+  && sed -i '/class Message < ApplicationRecord/a \ \ validates :body, presence: true, length: { maximum: 500 }' app/models/message.rb
 
 # --- seed some demo messages ---
-RUN cat > db/seeds.rb << 'RUBY'
+COPY --chown=rails <<'RUBY' db/seeds.rb
 ["Welcome to the Turbo Rails demo!",
  "Try creating a new message — it appears instantly via Turbo Streams.",
  "Click Edit on any message — Turbo Frames swap the content inline.",
