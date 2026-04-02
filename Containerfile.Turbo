@@ -221,7 +221,9 @@ COPY --chown=rails <<'RUBY' db/seeds.rb
   Message.create!(body: body)
 end
 RUBY
-RUN RAILS_ENV=production SECRET_KEY_BASE=placeholder bundle exec rails db:seed
+
+RUN RAILS_ENV=production bundle exec rails db:migrate \
+  && RAILS_ENV=production SECRET_KEY_BASE=placeholder bundle exec rails db:seed
 
 # precompile assets
 RUN bundle exec rails assets:precompile
