@@ -187,6 +187,8 @@ COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
   <h5 class="mb-3">New Message <small class="text-muted">(Turbo Stream: prepend)</small></h5>
   <%= render partial: "messages/form", locals: { message: @message } %>
 
+  <%= turbo_stream_from "messages" %>
+
   <h5 class="mb-3">Messages <small class="text-muted">(Turbo Frames: inline edit)</small></h5>
   <div id="messages">
     <%= render partial: "messages/message", collection: @messages, as: :message %>
@@ -207,9 +209,18 @@ COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
 </div>
 ERB
 
-# --- add version comment to layout + model validation ---
-RUN sed -i 's/<body>/<body>\n  <!-- Ruby <%= RUBY_VERSION %> Rails <%= Rails.version %> Bundler <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb \
-  && sed -i '/class Message < ApplicationRecord/a \ \ validates :body, presence: true, length: { maximum: 500 }' app/models/message.rb
+# --- add version comment to layout ---
+RUN sed -i 's/<body>/<body>\n  <!-- Ruby <%= RUBY_VERSION %> Rails <%= Rails.version %> Bundler <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb
+
+# --- model with validation + Turbo Stream broadcasts ---
+COPY --chown=rails <<'RUBY' app/models/message.rb
+class Message < ApplicationRecord
+  validates :body, presence: true, length: { maximum: 500 }
+
+  after_create_commit -> { broadcast_prepend_to "messages", target: "messages" }
+  after_destroy_commit -> { broadcast_remove_to "messages" }
+end
+RUBY
 
 # --- seed some demo messages ---
 COPY --chown=rails <<'RUBY' db/seeds.rb
