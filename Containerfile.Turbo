@@ -177,7 +177,7 @@ COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
     <h1 class="text-primary">Turbo Rails Demo</h1>
     <p class="text-muted">
       Ruby <%= RUBY_VERSION %> &middot; Bundler <%= Bundler::VERSION %> &middot; Rails <%= Rails.version %> &middot;
-      Hotwire Turbo Drive + Frames + Streams
+      Hotwire Turbo <%= Gem.loaded_specs['turbo-rails']&.version.to_s %> Drive + Frames + Streams
     </p>
     <span class="badge bg-secondary">
       <span id="message_count"><%= @messages.count %></span> messages
