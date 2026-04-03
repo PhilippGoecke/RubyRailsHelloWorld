@@ -11,7 +11,7 @@ RUN bundle init \
 # generate models and controllers
 RUN bundle exec rails generate scaffold Message body:text \
   && bundle exec rails generate controller dashboard index \
-  && bundle exec rails db:migrate
+  && RAILS_ENV=production bundle exec rails db:migrate
 
 # --- routes ---
 RUN sed -i 's/# root/root to: "dashboard#index"\n  get "dashboard\/slow", to: "dashboard#slow"\n  # root/g' config/routes.rb
@@ -44,7 +44,7 @@ COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
 <div class="container py-5" style="max-width: 780px;">
   <h1 class="text-primary text-center mb-2">Hotwire Stimulus Demo</h1>
   <p class="text-muted text-center mb-5">
-    Ruby <%= RUBY_VERSION %> &middot; Rails <%= Rails.version %> &middot; Stimulus <%= Stimulus::VERSION rescue "3.x" %><br>
+    Ruby <%= RUBY_VERSION %> &middot; Rails <%= Rails.version %> &middot; Stimulus <%= Stimulus::VERSION %><br>
     Controllers &middot; Actions &middot; Targets &middot; Values &middot; Classes &middot; Outlets &middot; Lifecycle
   </p>
 
