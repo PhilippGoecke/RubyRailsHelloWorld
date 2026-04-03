@@ -14,15 +14,30 @@ RUN bundle exec rails generate scaffold Message body:text \
   && bundle exec rails db:migrate
 
 # --- routes ---
-RUN sed -i 's/# root/root to: "dashboard#index"\n  # root/g' config/routes.rb
+RUN sed -i 's/# root/root to: "dashboard#index"\n  get "dashboard\/slow", to: "dashboard#slow"\n  # root/g' config/routes.rb
 
 # --- dashboard controller ---
 COPY --chown=rails <<'RUBY' app/controllers/dashboard_controller.rb
 class DashboardController < ApplicationController
   def index
   end
+
+  def slow
+    sleep 5
+    render partial: "dashboard/slow_content", layout: false
+  end
 end
 RUBY
+
+# --- slow content partial (loaded into the Turbo Frame) ---
+COPY --chown=rails <<'ERB' app/views/dashboard/_slow_content.html.erb
+<%= turbo_frame_tag "slow_frame" do %>
+  <div class="alert alert-success mb-0">
+    <strong>Done!</strong> This content was loaded asynchronously after a 5-second delay.
+    Server responded at <%= Time.current.strftime("%H:%M:%S") %>.
+  </div>
+<% end %>
+ERB
 
 # --- dashboard view: Stimulus showcase ---
 COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
@@ -144,6 +159,25 @@ COPY --chown=rails <<'ERB' app/views/dashboard/index.html.erb
              data-clipboard-target="output" value="(copied text appears here)"
              data-action="focus->clipboard#selectAll blur->clipboard#deselect">
       <p class="text-muted small" data-clipboard-target="status"></p>
+    </div>
+  </div>
+
+  <%# ── 7. Turbo Frames — Lazy Loading with Spinner ── %>
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header"><strong>7. Turbo Frames</strong> <small class="text-muted">— lazy async loading with spinner</small></div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <code>turbo_frame_tag</code> with <code>src:</code> and <code>loading: :lazy</code> &mdash;
+        the frame fetches <code>/dashboard/slow</code> (sleeps 5s) when it enters the viewport.
+      </p>
+      <%= turbo_frame_tag "slow_frame", src: dashboard_slow_path, loading: :lazy do %>
+        <div class="d-flex align-items-center gap-2 text-muted">
+          <div class="spinner-border spinner-border-sm" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          Loading slow content&hellip; (5 seconds)
+        </div>
+      <% end %>
     </div>
   </div>
 
