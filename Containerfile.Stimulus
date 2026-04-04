@@ -15,7 +15,7 @@ RUN bundle exec rails generate stimulus counter \
 
 # Create sample views and routes to demonstrate Stimulus
 RUN bundle exec rails generate controller showcase index counter clipboard modal \
-  && echo -e '<div id="app">\n    <div id="counter-app" data-controller="counter"></div>\n    <div id="clipboard-app" data-controller="clipboard"></div>\n    <div id="modal-app" data-controller="modal"></div>\n</div>' > app/views/showcase/index.html.erb \
+  && echo -e '<div id="app">\n      <div id="counter-app" data-controller="counter"></div>\n      <div id="clipboard-app" data-controller="clipboard"></div>\n      <div id="modal-app" data-controller="modal"></div>\n    </div>' > app/views/showcase/index.html.erb \
   && sed -i 's|# root|root to: "showcase#index"\n  # root|g' config/routes.rb
 
 # build JS and precompile assets
