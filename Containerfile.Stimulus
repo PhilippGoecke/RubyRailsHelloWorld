@@ -111,7 +111,7 @@ RUN bundle exec rails generate controller showcase index counter clipboard modal
   </section>
 </div>
 ERB
-  && sed -i 's|# root|root to: "showcase#index"\n  # root|g' config/routes.rb
+RUN sed -i 's|# root|root to: "showcase#index"\n  # root|g' config/routes.rb
 
 # build JS and precompile assets
 RUN bundle exec rails assets:precompile
