@@ -14,7 +14,7 @@ RUN bundle exec rails generate stimulus counter \
   && bundle exec rails generate stimulus modal
 
 # Create sample views and routes to demonstrate Stimulus
-RUN rails generate controller showcase index counter clipboard modal
+RUN bundle exec rails generate controller showcase index counter clipboard modal
 
 # build JS and precompile assets
 RUN bundle exec rails assets:precompile
