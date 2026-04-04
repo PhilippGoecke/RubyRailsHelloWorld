@@ -13,9 +13,104 @@ RUN bundle exec rails generate stimulus counter \
   && bundle exec rails generate stimulus clipboard \
   && bundle exec rails generate stimulus modal
 
+RUN cat <<'JS' > app/javascript/controllers/counter_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+export default class extends Controller {
+  static targets = ["value"]
+
+  connect() {
+    this.count = 0
+    this.render()
+  }
+
+  increment() {
+    this.count += 1
+    this.render()
+  }
+
+  decrement() {
+    this.count -= 1
+    this.render()
+  }
+
+  render() {
+    this.valueTarget.textContent = this.count
+  }
+}
+JS
+
+RUN cat <<'JS' > app/javascript/controllers/clipboard_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+export default class extends Controller {
+  static targets = ["source", "status"]
+
+  async copy() {
+    try {
+      await navigator.clipboard.writeText(this.sourceTarget.value)
+      this.statusTarget.textContent = "Copied!"
+    } catch (error) {
+      this.statusTarget.textContent = "Copy failed."
+    }
+  }
+}
+JS
+
+RUN cat <<'JS' > app/javascript/controllers/modal_controller.js
+import { Controller } from "@hotwired/stimulus"
+
+export default class extends Controller {
+  static targets = ["backdrop"]
+
+  open() {
+    this.backdropTarget.classList.remove("d-none")
+  }
+
+  close() {
+    this.backdropTarget.classList.add("d-none")
+  }
+
+  stop(event) {
+    event.stopPropagation()
+  }
+}
+JS
+
 # Create sample views and routes to demonstrate Stimulus
 RUN bundle exec rails generate controller showcase index counter clipboard modal \
-  && echo -e '<div id="app">\n      <div id="counter-app" data-controller="counter"></div>\n      <div id="clipboard-app" data-controller="clipboard"></div>\n      <div id="modal-app" data-controller="modal"></div>\n    </div>' > app/views/showcase/index.html.erb \
+  && cat <<'ERB' > app/views/showcase/index.html.erb
+<div id="app" class="container py-4">
+  <h1 class="mb-4">Stimulus Showcase</h1>
+
+  <section class="mb-4" data-controller="counter">
+    <h2>Counter</h2>
+    <button class="btn btn-outline-secondary" data-action="counter#decrement">-</button>
+    <span class="mx-3 fw-bold fs-4" data-counter-target="value">0</span>
+    <button class="btn btn-outline-primary" data-action="counter#increment">+</button>
+  </section>
+
+  <section class="mb-4" data-controller="clipboard">
+    <h2>Clipboard</h2>
+    <input class="form-control mb-2" type="text" value="Stimulus copied text" data-clipboard-target="source" readonly>
+    <button class="btn btn-primary" data-action="clipboard#copy">Copy</button>
+    <p class="mt-2 mb-0 text-success" data-clipboard-target="status"></p>
+  </section>
+
+  <section data-controller="modal">
+    <h2>Modal</h2>
+    <button class="btn btn-dark" data-action="modal#open">Open modal</button>
+
+    <div class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" data-modal-target="backdrop" data-action="click->modal#close">
+      <div class="bg-white p-4 rounded shadow position-absolute top-50 start-50 translate-middle" data-action="click->modal#stop">
+        <h3 class="h5">Hello from Stimulus</h3>
+        <p class="mb-3">This modal is controlled by the modal Stimulus controller.</p>
+        <button class="btn btn-secondary" data-action="modal#close">Close</button>
+      </div>
+    </div>
+  </section>
+</div>
+ERB
   && sed -i 's|# root|root to: "showcase#index"\n  # root|g' config/routes.rb
 
 # build JS and precompile assets
