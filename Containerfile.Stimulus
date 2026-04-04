@@ -1,0 +1,51 @@
+FROM rails:base as install
+
+WORKDIR /rails/demo
+
+# install Rails and scaffold a Stimulus showcase app
+RUN bundle init \
+  && bundle add rails --version "~> 8.1.3" \
+  && bundle update --bundler \
+  && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft
+
+# Generate Stimulus controllers for showcase
+RUN bundle exec rails generate stimulus counter \
+  && bundle exec rails generate stimulus clipboard \
+  && bundle exec rails generate stimulus modal
+
+# Create sample views and routes to demonstrate Stimulus
+RUN rails generate controller showcase index counter clipboard modal
+
+# build JS and precompile assets
+RUN bundle exec rails assets:precompile
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
+ENV RAILS_ENV=production
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD ruby -e "require 'net/http'; Net::HTTP.get(URI('http://localhost:3000/up'))" || exit 1
+
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
