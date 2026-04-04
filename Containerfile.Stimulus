@@ -12,9 +12,11 @@ RUN bundle init \
 RUN bundle exec rails generate stimulus counter \
   && bundle exec rails generate stimulus clipboard \
   && bundle exec rails generate stimulus modal
-  # Create sample views and routes to demonstrate Stimulus
-  RUN bundle exec rails generate controller showcase index counter clipboard modal \
-    && sed -i '/<div id="app">/a\    <div id="counter-app" data-controller="counter"></div>\n    <div id="clipboard-app" data-controller="clipboard"></div>\n    <div id="modal-app" data-controller="modal"></div>' app/views/showcase/index.html.erb
+
+# Create sample views and routes to demonstrate Stimulus
+RUN bundle exec rails generate controller showcase index counter clipboard modal \
+  && sed -i '/<div id="app">/a\    <div id="counter-app" data-controller="counter"></div>\n    <div id="clipboard-app" data-controller="clipboard"></div>\n    <div id="modal-app" data-controller="modal"></div>' app/views/showcase/index.html.erb \
+  && echo "root 'showcase#index'" >> config/routes.rb
 
 # build JS and precompile assets
 RUN bundle exec rails assets:precompile
