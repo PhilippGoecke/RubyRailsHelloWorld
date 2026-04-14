@@ -50,6 +50,7 @@ RUN bundle init \
   && bundle add rails --version "~> 8.1.3" \
   && bundle update --bundler \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
+  && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
   && bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
