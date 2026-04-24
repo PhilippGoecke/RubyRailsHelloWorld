@@ -1,11 +1,7 @@
 FROM rails:base as install
 
-WORKDIR /rails/demo
-
 # install Rails and initialize a new Rails app
-RUN bundle init \
-  && bundle add rails --version "~> 8.1.3" \
-  && bundle exec rails new . --force --skip-git --database=mysql --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
+RUN bundle exec rails new . --force --skip-git --database=mysql --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && sed -i 's/username:.*/username: <%= ENV.fetch("DB_USERNAME") { "rails" } %>/g' config/database.yml \
   && sed -i 's/password:.*/password: <%= ENV.fetch("DB_PASSWORD") { "secret" } %>/g' config/database.yml \
   && sed -i 's/database:.*/database: <%= ENV.fetch("DB_NAME") { "railsapp" } %>/g' config/database.yml \
