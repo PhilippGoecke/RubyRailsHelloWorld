@@ -49,4 +49,20 @@ RUN ruby --version; \
   gem --version; \
   bundle --version
 
+WORKDIR /rails/demo
+
+# install Rails and scaffold a Turbo showcase app
+RUN bundle init \
+  && bundle add rails \
+  && bundle update --bundler \
+  && 
+WORKDIR /rails/demo
+
+# install Rails and scaffold a Turbo showcase app
+RUN bundle init \
+  && bundle add rails \
+  && bundle update --bundler \
+  && bundle exec rails --version \
+  && bundle --version
+
 CMD [ "irb" ]
