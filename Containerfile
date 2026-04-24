@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.14.1
+ENV NODE_VERSION=24.15.0
 RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -39,8 +39,8 @@ RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && rbenv --version \
   && mkdir "$(rbenv root)"/plugins/ \
   && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
-  && rbenv install 4.0.2 \
-  && rbenv global 4.0.2
+  && rbenv install 4.0.3 \
+  && rbenv global 4.0.3
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
 WORKDIR /rails/demo
