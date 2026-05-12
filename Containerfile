@@ -33,6 +33,7 @@ RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
 ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
 
 # install Ruby using rbenv
+ENV RUBY_CONFIGURE_OPTS="--disable-install-rdoc" # Skip rdoc generation
 ENV PATH="$HOME/.rbenv/bin:$PATH"
 RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && ~/.rbenv/bin/rbenv init \
