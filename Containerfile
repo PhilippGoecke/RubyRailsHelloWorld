@@ -83,6 +83,8 @@ COPY --from=install /rails/demo /rails/demo
 
 WORKDIR /rails/demo
 
+RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
+
 ENV RAILS_ENV=production
 
 EXPOSE 3000
