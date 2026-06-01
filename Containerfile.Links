@@ -18,9 +18,7 @@ RUN bundle add cancancan \
   && rails generate cancan:ability \
   && sed -i 's/end/\n protect_from_forgery with: :exception\n check_authorization unless: :devise_controller?\n\n def current_ability\n @current_ability ||= ::Ability.new(current_account)\n end\n\n rescue_from CanCan::AccessDenied do |exception|\n if current_account.nil?\n session[:account_return_to] = request.fullpath\n redirect_to new_account_session_url, alert: "You have to log in to continue."\n else\n respond_to do |format|\n format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }\n format.json { head :forbidden }\n format.js { head :forbidden }\n end\n end\n end\n\nend/g' app/controllers/application_controller.rb
 # Links
-RUN bundle exec rails generate scaffold Link active:boolean url:string account:references \
-  && sed -i 's/:account/:account, optional: true\n has_many :link_tags\n has_many :tags, through: :link_tags\n has_one :link_favicon/g' app/models/link.rb \
-  && sed -i 's/references :account, null: false/references :account, null: true/g' db/migrate/*_create_links.rb \
+RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
   && sed -i 's/initialize(user)/initialize(account)\n account ||= Account.new # guest account/g' app/models/ability.rb \
   && sed -i 's/ end/ can :read, Link, active: true\n end/g' app/models/ability.rb \
@@ -28,6 +26,10 @@ RUN bundle exec rails generate scaffold Link active:boolean url:string account:r
   && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
   && bundle exec rails generate model LinkTag active:boolean link:references tag:references \
   && bundle exec rails generate model LinkFavicon icon:text link:references \
+  && bundle exec rails generate migration AddAccountToLink account:references \
+  && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon/g' app/models/link.rb \
+  && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb \
+  && 
   && RAILS_ENV=production bundle exec rails db:migrate
 RUN mkdir app/views/application/
 RUN sed -i "s/<body>/<body>\n <main class=\"d-flex flex-nowrap\">\n/g" app/views/layouts/application.html.erb \
@@ -37,6 +39,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/ApplicationController/a \ \ authorize_resource class: false' app/controllers/welcome_controller.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
   && sed -i 's/ end/ can :read, :welcome\n end/g' app/models/ability.rb \
+  && sed -i 's/ end/ can [:create, :read], Link\n end/g' app/models/ability.rb \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
   && sed -i 's|<h1>Links</h1>|<h1 class="display-5 fw-bold text-primary mb-4"><i class="bi bi-link-45deg"></i> Links</h1>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<div id="links" class="list-group shadow-sm">|g' app/views/links/index.html.erb \
