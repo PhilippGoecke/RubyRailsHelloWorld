@@ -25,7 +25,7 @@ RUN bundle add cancancan \
 # current account, allow guests to read active links, set up Tag many-to-many via LinkTag,
 # add an account reference to links (nullable for guest-created links), add URL validation,
 # and run migrations.
-RUN bundle exec rails generate scaffold Link active:boolean url:string \
+RUN bundle exec rails generate scaffold Link url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
   && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
   && sed -i 's/@link = Link.new(link_params)/@link = Link.new(link_params)\n @link.account = current_account if account_signed_in?/g' app/controllers/links_controller.rb \
@@ -35,7 +35,7 @@ RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
   && bundle exec rails generate model LinkTag active:boolean link:references tag:references \
   && bundle exec rails generate model LinkFavicon icon:text link:references \
-  && bundle exec rails generate migration AddAccountToLink account:references \
+  && bundle exec rails generate migration AddAccountToLink account:references active:boolean \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon\n  validates :url, format: { with: \/\\Ahttps?:\\\/\\\/.+\\z\/, message: "must start with http:\/\/ or https:\/\/" }/g' app/models/link.rb \
   && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb \
   && RAILS_ENV=production bundle exec rails db:migrate
