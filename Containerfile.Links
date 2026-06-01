@@ -3,21 +3,28 @@ FROM rails:base as install
 # install Rails and initialize a new Rails app
 RUN bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft
 
-# Devise
+# Devise: add authentication gem, run installer, generate Account model, and apply migrations
 RUN bundle add devise \
   && bundle exec rails generate devise:install \
   && bundle exec rails generate devise Account \
   && RAILS_ENV=production bundle exec rails db:migrate
-# OTP
+# OTP: optional two-factor authentication for Devise (currently disabled)
 #RUN bundle add devise-otp \
 # && bundle exec rails g devise_otp:install \
 # && bundle exec rails g devise_otp Account \
 # && RAILS_ENV=production bundle exec rails db:migrate
-# CanCanCan
+# CanCanCan: authorization gem; generate Ability class and patch ApplicationController
+# to enforce CSRF protection, require authorization on all non-Devise controllers,
+# wire current_ability to current_account, and handle AccessDenied by redirecting
+# guests to sign in or returning forbidden for unauthorized authenticated users.
 RUN bundle add cancancan \
   && rails generate cancan:ability \
   && sed -i 's/end/\n protect_from_forgery with: :exception\n check_authorization unless: :devise_controller?\n\n def current_ability\n @current_ability ||= ::Ability.new(current_account)\n end\n\n rescue_from CanCan::AccessDenied do |exception|\n if current_account.nil?\n session[:account_return_to] = request.fullpath\n redirect_to new_account_session_url, alert: "You have to log in to continue."\n else\n respond_to do |format|\n format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }\n format.json { head :forbidden }\n format.js { head :forbidden }\n end\n end\n end\n\nend/g' app/controllers/application_controller.rb
-# Links
+# Links: scaffold the Link resource and related models (Tag, LinkTag join, LinkFavicon),
+# add CanCanCan authorization, scope index to active links, associate new links with the
+# current account, allow guests to read active links, set up Tag many-to-many via LinkTag,
+# add an account reference to links (nullable for guest-created links), add URL validation,
+# and run migrations.
 RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
   && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
@@ -32,9 +39,19 @@ RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon\n  validates :url, format: { with: \/\\Ahttps?:\\\/\\\/.+\\z\/, message: "must start with http:\/\/ or https:\/\/" }/g' app/models/link.rb \
   && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb \
   && RAILS_ENV=production bundle exec rails db:migrate
+# Shared views directory for application-wide partials
 RUN mkdir app/views/application/
+# Layout: wrap content in a Bootstrap flex <main> with a scrollable container
 RUN sed -i "s/<body>/<body>\n <main class=\"d-flex flex-nowrap\">\n/g" app/views/layouts/application.html.erb \
   && sed -i 's/<%= yield %>/<div class="container-fluid overflow-auto">\n <%= yield %>\n <\/div>\n <\/main>/g' app/views/layouts/application.html.erb
+# Welcome page + UI polish:
+# - generate a welcome#index controller/view and set it as the root route
+# - authorize the welcome action (no model class) and default @name to "World"
+# - allow everyone to read :welcome and create/read Link via Ability
+# - style the Links index, form, new, and edit pages with Bootstrap classes
+# - pre-fill the URL field with "https://" when empty
+# - add a flash partial rendered in the layout (with a debug version comment)
+# - add a static Impressum page and precompile assets
 RUN bundle exec rails generate controller welcome index \
   && sed -i 's/# root/root to: "welcome#index"\n # root/g' config/routes.rb \
   && sed -i '/ApplicationController/a \ \ authorize_resource class: false' app/controllers/welcome_controller.rb \
@@ -55,10 +72,12 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's$<body>$<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->$g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
   && bundle exec rails assets:precompile
-# Data Migration
+# Data Migration: add mysql2 and a Rake task to import legacy links from a MySQL DB
+# (credentials/table read from ENV). Run with: bundle exec rails data:import
 RUN bundle add mysql2 \
   && bundle exec rails generate task data import \
   && sed -i '/task import: :environment do/a \ \ require "mysql2"\n\n client = Mysql2::Client.new(host: ENV.fetch("DB_HOSTNAME"), username: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD"), database: ENV.fetch("DB_DATABASE"))\n puts "Importing links ..."\n client.query("SELECT * FROM #{ENV.fetch(\"DB_TABLENAME\")};").each do |row|\n Link.create!(url: row["URL"], active: row["Active"])\n end' lib/tasks/data.rake
+# Trigger the import task manually after the container is running:
 # bundle exec rails data:import
 
 # new stage for Rails app
