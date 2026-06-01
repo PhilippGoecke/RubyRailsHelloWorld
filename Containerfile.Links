@@ -20,6 +20,8 @@ RUN bundle add cancancan \
 # Links
 RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
+  && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
+  && sed -i 's/@link = Link.new(link_params)/@link = Link.new(link_params)\n @link.account = current_account if account_signed_in?/g' app/controllers/links_controller.rb \
   && sed -i 's/initialize(user)/initialize(account)\n account ||= Account.new # guest account/g' app/models/ability.rb \
   && sed -i 's/ end/ can :read, Link, active: true\n end/g' app/models/ability.rb \
   && bundle exec rails generate model Tag active:boolean name:string \
@@ -29,7 +31,6 @@ RUN bundle exec rails generate scaffold Link active:boolean url:string \
   && bundle exec rails generate migration AddAccountToLink account:references \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon/g' app/models/link.rb \
   && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb \
-  && 
   && RAILS_ENV=production bundle exec rails db:migrate
 RUN mkdir app/views/application/
 RUN sed -i "s/<body>/<body>\n <main class=\"d-flex flex-nowrap\">\n/g" app/views/layouts/application.html.erb \
