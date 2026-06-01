@@ -44,8 +44,13 @@ RUN bundle exec rails generate controller welcome index \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
   && sed -i 's|<h1>Links</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center"><i class="bi bi-link-45deg"></i> Links</h1>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<div id="links" class="list-group shadow-sm mx-auto" style="max-width: 600px;">|g' app/views/links/index.html.erb \
-  && sed -i 's|<%= link_to "New link", new_link_path %>|<%= link_to "<i class=\&quot;bi bi-plus-circle\&quot;></i> New Link".html_safe, new_link_path, class: "btn btn-primary mb-3" %>|g' app/views/links/index.html.erb \
+  && sed -i 's|<%= link_to "New link", new_link_path %>|<div class="text-center"><%= link_to "<i class=\&quot;bi bi-plus-circle\&quot;></i> New Link".html_safe, new_link_path, class: "btn btn-primary mb-3" %></div>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="<%= dom_id link %>">|<div id="<%= dom_id link %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">|g' app/views/links/_link.html.erb \
+  && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence || "https://")|g' app/views/links/_form.html.erb \
+  && sed -i 's|<h1>New link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">New Link</h1>|g' app/views/links/new.html.erb \
+  && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/new.html.erb \
+  && sed -i 's|<h1>Editing link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">Editing Link</h1>|g' app/views/links/edit.html.erb \
+  && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/edit.html.erb \
   && echo -e "<div class=\"container mt-3\">\n <% flash.each do |key, value| %>\n <div class=\"alert alert-<%= key == 'notice' ? 'success' : 'danger' %> alert-dismissible fade show\" role=\"alert\">\n <%= value %>\n <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" aria-label=\"Close\"></button>\n </div>\n <% end %>\n</div>" > app/views/layouts/_flash.html.erb \
   && sed -i 's$<body>$<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->$g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
