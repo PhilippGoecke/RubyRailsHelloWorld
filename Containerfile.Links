@@ -68,7 +68,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/new.html.erb \
   && sed -i 's|<h1>Editing link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">Editing Link</h1>|g' app/views/links/edit.html.erb \
   && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/edit.html.erb \
-  && sed -i 's|<%= render @link %>|<%= render @link %>\n<div class="mx-auto" style="max-width: 600px;">\n  <h3>Tags</h3>\n  <ul class="list-group">\n    <% @link.link_tags.where(active: true).includes(:tag).each do |lt| %>\n      <li class="list-group-item"><%= lt.tag.name %></li>\n    <% end %>\n  </ul>\n</div>|g' app/views/links/show.html.erb \
+  && sed -i 's|<%= render @link %>|<%= render @link %>\n<div class="mx-auto" style="max-width: 600px;">\n  <h3>Tags</h3>\n  <ul class="list-group">\n    <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n      <li class="list-group-item"><%= lt.tag.name %></li>\n    <% end %>\n  </ul>\n</div>|g' app/views/links/show.html.erb \
   && echo -e "<div class=\"container mt-3\">\n <% flash.each do |key, value| %>\n <div class=\"alert alert-<%= key == 'notice' ? 'success' : 'danger' %> alert-dismissible fade show\" role=\"alert\">\n <%= value %>\n <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" aria-label=\"Close\"></button>\n </div>\n <% end %>\n</div>" > app/views/layouts/_flash.html.erb \
   && sed -i 's$<body>$<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->$g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
