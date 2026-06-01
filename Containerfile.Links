@@ -63,7 +63,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<div id="links">|<div id="links" class="list-group shadow-sm mx-auto" style="max-width: 600px;">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|<div class="text-center"><%= link_to "<i class=\&quot;bi bi-plus-circle\&quot;></i> New Link".html_safe, new_link_path, class: "btn btn-primary mb-3" %></div>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="<%= dom_id link %>">|<div id="<%= dom_id link %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">|g' app/views/links/_link.html.erb \
-  && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence || "https://")|g' app/views/links/_form.html.erb \
+  && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence \|\| "https://")|g' app/views/links/_form.html.erb \
   && sed -i 's|<h1>New link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">New Link</h1>|g' app/views/links/new.html.erb \
   && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/new.html.erb \
   && sed -i 's|<h1>Editing link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">Editing Link</h1>|g' app/views/links/edit.html.erb \
