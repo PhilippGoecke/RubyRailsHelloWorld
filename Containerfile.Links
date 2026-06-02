@@ -68,7 +68,8 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
   && sed -i 's/ end/ can :read, :welcome\n end/g' app/models/ability.rb \
   && sed -i 's/ end/ can [:create, :read], Link\n end/g' app/models/ability.rb \
-  && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
+  && echo '<div class="d-flex flex-column justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1><%= link_to "Go to Links", links_path, class: "btn btn-primary mt-3" %></div>' > app/views/welcome/index.html.erb \
+  # Links index
   && sed -i 's|<h1>Links</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center"><i class="bi bi-link-45deg"></i> Links</h1>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<div id="links" class="list-group shadow-sm mx-auto" style="max-width: 600px;">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|<div class="text-center"><%= link_to "<i class=\&quot;bi bi-plus-circle\&quot;></i> New Link".html_safe, new_link_path, class: "btn btn-primary mb-3" %></div>|g' app/views/links/index.html.erb \
