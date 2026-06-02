@@ -1,6 +1,15 @@
+# ============================================================================
+# Stage 1: install — build the Rails application on top of the rails:base image
+# ============================================================================
 FROM rails:base as install
 
-# install Rails and initialize a new Rails app
+# Initialize a new Rails app in the current working directory:
+# --force            : overwrite any existing files without prompting
+# --skip-git         : do not create a .gitignore / git repo
+# --database=sqlite3 : use SQLite (simple, file-based DB)
+# --javascript=esbuild : bundle JS with esbuild
+# --css=bootstrap    : install and configure Bootstrap for styling
+# --asset-pipeline=propshaft : use the modern Propshaft asset pipeline
 RUN bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft
 
 # Devise: add authentication gem, run installer, generate Account model, and apply migrations
@@ -69,7 +78,10 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/new.html.erb \
   && sed -i 's|<h1>Editing link</h1>|<h1 class="display-5 fw-bold text-primary mb-4 text-center">Editing Link</h1>|g' app/views/links/edit.html.erb \
   && sed -i 's|<div>|<div class="mx-auto" style="max-width: 600px;">|' app/views/links/edit.html.erb \
-  && sed -i 's|<%= render @link %>|<%= render @link %>\n<div class="mx-auto" style="max-width: 600px;">\n  <h3>Tags</h3>\n  <ul class="list-group">\n    <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n      <li class="list-group-item"><%= lt.tag.name %></li>\n    <% end %>\n  </ul>\n</div>|g' app/views/links/show.html.erb \
+  && sed -i 's|<%= render @link %>|<%= render @link %>\n<div class="mx-auto" style="max-width: 600px;">\n  <h3>Tags</h3>\n  <ul class="list-group mb-3">\n    <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n      <li class="list-group-item"><%= lt.tag.name %></li>\n    <% end %>\n  </ul>\n  <%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "d-flex gap-2" do \|f\| %>\n    <%= f.text_field :tag_name, placeholder: "New tag", class: "form-control", required: true %>\n    <%= f.submit "Add Tag", class: "btn btn-primary" %>\n  <% end %>\n</div>|g' app/views/links/show.html.erb \
+  && sed -i 's|resources :links|resources :links do\n    resources :link_tags, only: [:create]\n  end|g' config/routes.rb \
+  && echo 'class LinkTagsController < ApplicationController\n  load_and_authorize_resource :link\n  load_and_authorize_resource :link_tag, through: :link\n\n  def create\n    tag = Tag.find_or_create_by(name: params[:tag_name]) { |t| t.active = true }\n    @link_tag = @link.link_tags.find_or_create_by(tag: tag) { |lt| lt.active = true }\n    redirect_to @link, notice: "Tag added."\n  end\nend' > app/controllers/link_tags_controller.rb \
+  && sed -i 's/ end/ can :manage, LinkTag\n end/g' app/models/ability.rb \
   && echo -e "<div class=\"container mt-3\">\n <% flash.each do |key, value| %>\n <div class=\"alert alert-<%= key == 'notice' ? 'success' : 'danger' %> alert-dismissible fade show\" role=\"alert\">\n <%= value %>\n <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" aria-label=\"Close\"></button>\n </div>\n <% end %>\n</div>" > app/views/layouts/_flash.html.erb \
   && sed -i 's$<body>$<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->$g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
