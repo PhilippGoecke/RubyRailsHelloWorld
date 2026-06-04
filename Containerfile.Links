@@ -67,7 +67,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/ApplicationController/a \ \ authorize_resource class: false' app/controllers/welcome_controller.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
   && sed -i 's/ end/ can :read, :welcome\n end/g' app/models/ability.rb \
-  && sed -i 's/ end/ can [:create, :read], Link\n end/g' app/models/ability.rb \
+  && sed -i 's/ end/ can [:create, :read, :search], Link\n end/g' app/models/ability.rb \
   # Retro stylesheet (Propshaft serves files from app/assets/stylesheets)
   && printf '%s\n' \
       'body { font-family: Verdana, Arial, sans-serif; font-size: 13px; background: #fff; color: #222; margin: 0; padding: 20px; text-align: center; }' \
