@@ -100,23 +100,8 @@ RUN bundle exec rails generate controller welcome index \
   && echo '<%= form_with model: Link.new, url: links_path, method: :post, local: true, class: "url-form" do |f| %><%= f.text_field :url, value: "https://" %><%= f.submit "Add [+]" %><% end %>' > app/views/links/_new_form.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/links/_nav.html.erb \
   # Links Search
-  && printf '%s\n' \
-      '<%= render "links/new_form" %>' \
-      '<%= render "links/nav" %>' \
-      '<%= form_with url: search_links_path, method: :get, local: true, class: "url-form" do |f| %>' \
-      '  <%= text_field_tag :q, params[:q], placeholder: "Search links...", autofocus: true %>' \
-      '  <%= submit_tag "Search" %>' \
-      '<% end %>' \
-      '<% if @links.any? %>' \
-      '  <table class="links"><tbody>' \
-      '    <%= render @links %>' \
-      '  </tbody></table>' \
-      '<% elsif params[:q].present? %>' \
-      '  <p style="text-align:center;">No links found for &quot;<%= params[:q] %>&quot;.</p>' \
-      '<% end %>' \
-      > app/views/links/search.html.erb \
   && sed -i 's|resources :links|resources :links do\n    collection do\n      get :search\n    end\n  end|g' config/routes.rb \
-  && sed -i 's|def index|def search\n    @links = Link.where(active: true).where("url LIKE ?", "%#{params[:q]}%") if params[:q].present?\n    @links \|\|= Link.none\n    authorize! :read, Link\n    render :search\n  end\n\n  def index|g' app/controllers/links_controller.rb \
+  && sed -i 's|def index|def search\n    @links = Link.where(active: true).where("url LIKE ?", "%#{params[:q]}%") if params[:q].present?\n    @links \|\|= Link.none\n    authorize! :read, Link\n    render :index\n  end\n\n  def index|g' app/controllers/links_controller.rb \
   # Links index
   && sed -i 's|<h1>Links</h1>|<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
   && sed -i '/notice/d' app/views/links/index.html.erb \
