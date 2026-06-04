@@ -7,9 +7,7 @@ FROM rails:base as install
 # --force            : overwrite any existing files without prompting
 # --skip-git         : do not create a .gitignore / git repo
 # --database=sqlite3 : use SQLite (simple, file-based DB)
-# --skip-javascript  : do not set up a JavaScript bundler (no esbuild)
-# --skip-asset-pipeline : no asset pipeline (plain CSS served from /public)
-RUN bundle exec rails new . --force --skip-git --database=sqlite3 --skip-javascript --skip-asset-pipeline
+RUN bundle exec rails new . --force --skip-git --database=sqlite3 --skip-javascript --asset-pipeline=propshaft
 
 # Devise: add authentication gem, run installer, generate Account model, and apply migrations
 RUN bundle add devise \
@@ -111,8 +109,8 @@ RUN bundle exec rails generate controller welcome index \
   # Other
   && echo -e "<% flash.each do |key, value| %>\n  <div class=\"flash <%= key == 'notice' ? 'notice' : 'alert' %>\"><%= value %></div>\n<% end %>" > app/views/layouts/_flash.html.erb \
   && sed -i 's|<body>|<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->|g' app/views/layouts/application.html.erb \
-  && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html
-  #&& bundle exec rails assets:precompile
+  && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
+  && bundle exec rails assets:precompile
 # Data Migration: add mysql2 and a Rake task to import legacy links from a MySQL DB
 # (credentials/table read from ENV). Run with: bundle exec rails data:import
 RUN bundle add mysql2 \
