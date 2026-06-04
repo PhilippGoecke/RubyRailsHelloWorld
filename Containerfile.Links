@@ -40,8 +40,9 @@ RUN bundle exec rails generate scaffold Link url:string \
   && sed -i 's/@link = Link.new(link_params)/@link = Link.new(link_params)\n  @link.account = current_account if account_signed_in?\n  @link.active = true/g' app/controllers/links_controller.rb \
   && sed -i 's/initialize(user)/initialize(account)\n account ||= Account.new # guest account/g' app/models/ability.rb \
   && sed -i 's/ end/ can :read, Link, active: true\n end/g' app/models/ability.rb \
-  && bundle exec rails generate model Tag active:boolean name:string \
+  && bundle exec rails generate scaffold Tag active:boolean name:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
+  && sed -i 's/ end/ can :read, Tag, active: true\n end/g' app/models/ability.rb \
   && bundle exec rails generate scaffold LinkTag active:boolean link:references tag:references \
   && bundle exec rails generate model LinkFavicon icon:text link:references \
   && bundle exec rails generate migration AddAccountToLink account:references active:boolean \
