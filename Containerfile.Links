@@ -41,6 +41,7 @@ RUN bundle exec rails generate scaffold Link url:string \
   && bundle exec rails generate scaffold Tag active:boolean name:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource\n|g' app/controllers/tags_controller.rb \
+  && sed -i 's|<h1>Tags</h1>|<%= render "application/logo" %><h1>Tags</h1>|g' app/views/tags/index.html.erb \
   && sed -i 's/ end/ can :read, Tag, active: true\n end/g' app/models/ability.rb \
   && bundle exec rails generate scaffold LinkTag active:boolean link:references tag:references \
   && bundle exec rails generate model LinkFavicon icon:text link:references \
@@ -52,7 +53,7 @@ RUN bundle exec rails generate scaffold Link url:string \
 # Shared views directory for application-wide partials
 RUN mkdir app/views/application/
 # Layout: wrap content in a centered <main> container (no Bootstrap)
-RUN sed -i 's|<%= yield %>|<main class="container">\n <%= yield %>\n </main>\n <footer class="footer">Version: Rails Alpha 0.87.1 \&copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>|g' app/views/layouts/application.html.erb
+RUN sed -i 's|<%= yield %>|<main class="container">\n <%= yield %>\n </main>\n <footer class="footer">Version: Rails Alpha 0.87.2 \&copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>|g' app/views/layouts/application.html.erb
 # Welcome page + retro UI (plain CSS, classic "L1nks" look):
 # - generate a welcome#index controller/view and set it as the root route
 # - authorize the welcome action (no model class) and default @name to "World"
@@ -99,7 +100,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<h1>Links</h1>|<%= render "application/logo" %>\n<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<table class="links"><tbody id="links">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|</tbody></table>|g' app/views/links/index.html.erb \
-  && sed -i 's|<div id="<%= dom_id link %>">|<tr id="<%= dom_id link %>"><td class="favicon"><%= link_to link, target: "_blank", rel: "noopener noreferrer" do %><% if link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= link.link_favicon.icon %>" alt="" width="16" height="16" /><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"></span><% end %><% end %></td><td><%= link_to link.url, link.url, target: "_blank", rel: "noopener noreferrer" %></td><td class="action"><%= link_to "[+]", new_link_link_tag_path(link) rescue "" %></td></tr><div style="display:none">|g' app/views/links/_link.html.erb \
+  && sed -i 's|<div id="<%= dom_id link %>">|<tr id="<%= dom_id link %>">\n  <td class="favicon"><%= link_to link, target: "_blank", rel: "noopener noreferrer" do %><% if link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= link.link_favicon.icon %>" alt="" width="16" height="16" /><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"></span><% end %><% end %></td>\n  <td><%= link_to link.url, link.url, target: "_blank", rel: "noopener noreferrer" %></td>\n  <td class="action"><%= link_to "[+]", new_link_link_tag_path(link) rescue "" %></td>\n</tr>|g' app/views/links/_link.html.erb \
   && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence \|\| "http://")|g' app/views/links/_form.html.erb \
   && sed -i 's|<h1>New link</h1>|<%= render "application/logo" %><h1>New Link</h1>|g' app/views/links/new.html.erb \
   && sed -i 's|<h1>Editing link</h1>|<%= render "application/logo" %><h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
