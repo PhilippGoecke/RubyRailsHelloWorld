@@ -107,6 +107,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource :link\n|g' app/controllers/link_tags_controller.rb \
   && sed -i 's|def create|def create\n    tag = Tag.find_or_create_by(name: params[:tag_name]) { \|t\| t.active = true }\n    @link_tag = @link.link_tags.find_or_create_by(tag: tag) { \|lt\| lt.active = true }\n    redirect_to @link, notice: "Tag added."\n  end\n\n  def _create_disabled|g' app/controllers/link_tags_controller.rb \
   && sed -i 's/ end/ can :manage, LinkTag\n end/g' app/models/ability.rb \
+  # Other
   && echo -e "<% flash.each do |key, value| %>\n  <div class=\"flash <%= key == 'notice' ? 'notice' : 'alert' %>\"><%= value %></div>\n<% end %>" > app/views/layouts/_flash.html.erb \
   && sed -i 's|<body>|<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->|g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
