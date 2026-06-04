@@ -7,10 +7,10 @@ FROM rails:base as install
 # --force            : overwrite any existing files without prompting
 # --skip-git         : do not create a .gitignore / git repo
 # --database=sqlite3 : use SQLite (simple, file-based DB)
-# --javascript=esbuild : bundle JS with esbuild
+# --skip-javascript  : do not set up a JavaScript bundler (no esbuild)
 # --asset-pipeline=propshaft : use the modern Propshaft asset pipeline
 # (no --css flag: plain CSS, no Bootstrap)
-RUN bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --asset-pipeline=propshaft
+RUN bundle exec rails new . --force --skip-git --database=sqlite3 --skip-javascript --asset-pipeline=propshaft
 
 # Devise: add authentication gem, run installer, generate Account model, and apply migrations
 RUN bundle add devise \
