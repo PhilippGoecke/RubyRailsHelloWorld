@@ -87,8 +87,8 @@ RUN bundle exec rails generate controller welcome index \
       'table.links td.action { width: 16px; text-align: right; }' \
       'table.links a { color: #00c; text-decoration: underline; }' \
       '.footer { text-align: center; font-size: 11px; color: #555; margin-top: 30px; }' \
-      '.flash { max-width: 560px; margin: 10px auto; padding: 6px 10px; border: 1px solid #888; background: #ffd; text-align: center; }' \
-      '.flash.alert { background: #fdd; }' \
+      '.flash { max-width: 560px; margin: 6px auto; padding: 4px 8px; border-left: 3px solid #c8c8a0; background: transparent; color: #666; font-size: 12px; text-align: center; opacity: 0.85; }' \
+      '.flash.alert { border-left-color: #d4a0a0; color: #944; }' \
       'h1 { font-size: 18px; }' \
       > app/assets/stylesheets/application.css \
   # Shared logo partial used across views
@@ -98,6 +98,7 @@ RUN bundle exec rails generate controller welcome index \
   && echo '<%= form_with model: Link.new, url: links_path, method: :post, local: true, class: "url-form" do |f| %><%= f.text_field :url, value: "https://" %><%= f.submit "Add [+]" %><% end %>' > app/views/links/_new_form.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><a href="#">🔍 Link Finden</a><a href="#">📂 Kategorie</a><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/links/_nav.html.erb \
   && sed -i 's|<h1>Links</h1>|<%= render "application/logo" %>\n<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
+  && sed -i '/notice/d' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<table class="links"><tbody id="links">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|</tbody></table>|g' app/views/links/index.html.erb \
   && sed -i 's|<div id="<%= dom_id link %>">|<tr id="<%= dom_id link %>">\n  <td class="favicon"><%= link_to link, target: "_blank", rel: "noopener noreferrer" do %><% if link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= link.link_favicon.icon %>" alt="" width="16" height="16" /><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"></span><% end %><% end %></td>\n  <td><%= link_to link.url, link.url, target: "_blank", rel: "noopener noreferrer" %></td>\n  <td class="action"><%= link_to "[+]", new_link_link_tag_path(link) rescue "" %></td>|g' app/views/links/_link.html.erb \
