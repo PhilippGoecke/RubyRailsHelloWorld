@@ -1,0 +1,153 @@
+# ============================================================================
+# Stage 1: install — build the Rails application on top of the rails:base image
+# ============================================================================
+FROM rails:base as install
+
+# Initialize a new Rails app in the current working directory:
+# --force            : overwrite any existing files without prompting
+# --skip-git         : do not create a .gitignore / git repo
+# --database=sqlite3 : use SQLite (simple, file-based DB)
+# --javascript=esbuild : bundle JS with esbuild
+# --asset-pipeline=propshaft : use the modern Propshaft asset pipeline
+# (no --css flag: plain CSS, no Bootstrap)
+RUN bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --asset-pipeline=propshaft
+
+# Devise: add authentication gem, run installer, generate Account model, and apply migrations
+RUN bundle add devise \
+  && bundle exec rails generate devise:install \
+  && bundle exec rails generate devise Account \
+  && RAILS_ENV=production bundle exec rails db:migrate
+# OTP: optional two-factor authentication for Devise (currently disabled)
+#RUN bundle add devise-otp \
+# && bundle exec rails g devise_otp:install \
+# && bundle exec rails g devise_otp Account \
+# && RAILS_ENV=production bundle exec rails db:migrate
+# CanCanCan: authorization gem; generate Ability class and patch ApplicationController
+# to enforce CSRF protection, require authorization on all non-Devise controllers,
+# wire current_ability to current_account, and handle AccessDenied by redirecting
+# guests to sign in or returning forbidden for unauthorized authenticated users.
+RUN bundle add cancancan \
+  && rails generate cancan:ability \
+  && sed -i 's/end/\n protect_from_forgery with: :exception\n check_authorization unless: :devise_controller?\n\n def current_ability\n @current_ability ||= ::Ability.new(current_account)\n end\n\n rescue_from CanCan::AccessDenied do |exception|\n if current_account.nil?\n session[:account_return_to] = request.fullpath\n redirect_to new_account_session_url, alert: "You have to log in to continue."\n else\n respond_to do |format|\n format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }\n format.json { head :forbidden }\n format.js { head :forbidden }\n end\n end\n end\n\nend/g' app/controllers/application_controller.rb
+# Links: scaffold the Link resource and related models (Tag, LinkTag join, LinkFavicon),
+# add CanCanCan authorization, scope index to active links, associate new links with the
+# current account, allow guests to read active links, set up Tag many-to-many via LinkTag,
+# add an account reference to links (nullable for guest-created links), add URL validation,
+# and run migrations.
+RUN bundle exec rails generate scaffold Link url:string \
+  && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
+  && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
+  && sed -i 's/@link = Link.new(link_params)/@link = Link.new(link_params)\n  @link.account = current_account if account_signed_in?\n  @link.active = true/g' app/controllers/links_controller.rb \
+  && sed -i 's/initialize(user)/initialize(account)\n account ||= Account.new # guest account/g' app/models/ability.rb \
+  && sed -i 's/ end/ can :read, Link, active: true\n end/g' app/models/ability.rb \
+  && bundle exec rails generate model Tag active:boolean name:string \
+  && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
+  && bundle exec rails generate scaffold LinkTag active:boolean link:references tag:references \
+  && bundle exec rails generate model LinkFavicon icon:text link:references \
+  && bundle exec rails generate migration AddAccountToLink account:references active:boolean \
+  && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon\n  validates :url, format: { with: \/\\Ahttps?:\\\/\\\/.+\\z\/, message: "must start with http:\/\/ or https:\/\/" }\n  after_create :build_favicon\n\n  def build_favicon\n    LinkFavicon.download_for(self)\n  end/g' app/models/link.rb \
+  && sed -i 's/ApplicationRecord/ApplicationRecord\n  def self.download_for(link)\n    require "open-uri"\n    require "base64"\n    uri = URI.parse(link.url)\n    favicon_url = "#{uri.scheme}:\/\/#{uri.host}\/favicon.ico"\n    data = URI.open(favicon_url, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE).read\n    link.create_link_favicon(icon: Base64.strict_encode64(data))\n  rescue StandardError => e\n    Rails.logger.warn("Favicon download failed for #{link.url}: #{e.message}")\n  end/g' app/models/link_favicon.rb \
+  && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb \
+  && RAILS_ENV=production bundle exec rails db:migrate
+# Shared views directory for application-wide partials
+RUN mkdir app/views/application/
+# Layout: wrap content in a centered <main> container (no Bootstrap)
+RUN sed -i 's|<%= yield %>|<main class="container">\n <%= yield %>\n </main>\n <footer class="footer">Version: Beta 0.86.19 \&copy;2010 - <%= link_to "Impressum", "/impressum.html" %></footer>|g' app/views/layouts/application.html.erb
+# Welcome page + retro UI (plain CSS, classic "L1nks" look):
+# - generate a welcome#index controller/view and set it as the root route
+# - authorize the welcome action (no model class) and default @name to "World"
+# - allow everyone to read :welcome and create/read Link via Ability
+# - write a plain CSS stylesheet that mimics the classic screenshot
+# - style the Links index, form, new, and edit pages with simple classes
+# - pre-fill the URL field with "https://" when empty
+# - add a flash partial rendered in the layout
+# - add a static Impressum page and precompile assets
+RUN bundle exec rails generate controller welcome index \
+  && sed -i 's/# root/root to: "welcome#index"\n # root/g' config/routes.rb \
+  && sed -i '/ApplicationController/a \ \ authorize_resource class: false' app/controllers/welcome_controller.rb \
+  && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
+  && sed -i 's/ end/ can :read, :welcome\n end/g' app/models/ability.rb \
+  && sed -i 's/ end/ can [:create, :read], Link\n end/g' app/models/ability.rb \
+  # Retro stylesheet (Propshaft serves files from app/assets/stylesheets)
+  && printf '%s\n' \
+      'body { font-family: Verdana, Arial, sans-serif; font-size: 13px; background: #fff; color: #222; margin: 0; padding: 20px; text-align: center; }' \
+      '.container { max-width: 560px; margin: 0 auto; text-align: left; }' \
+      '.logo { font-family: "Times New Roman", serif; font-size: 48px; font-weight: bold; text-align: center; margin: 10px 0 4px; }' \
+      '.logo .l1 { color: #4285F4; } .logo .l2 { color: #DB4437; } .logo .n  { color: #F4B400; } .logo .k  { color: #4285F4; } .logo .s  { color: #0F9D58; }' \
+      '.url-form { display: flex; gap: 6px; margin: 14px 0; }' \
+      '.url-form input[type=text] { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 13px; }' \
+      '.url-form input[type=submit], .btn { padding: 4px 10px; border: 1px solid #888; background: #f3f3f3; cursor: pointer; font-size: 13px; }' \
+      '.nav { margin: 10px 0 14px; font-size: 13px; }' \
+      '.nav a { color: #00c; margin-right: 14px; text-decoration: underline; }' \
+      'table.links { width: 100%; border-collapse: collapse; }' \
+      'table.links tr:nth-child(odd) { background: #eee; }' \
+      'table.links tr:nth-child(even) { background: #f7f7f7; }' \
+      'table.links td { padding: 3px 6px; }' \
+      'table.links td.favicon { width: 16px; }' \
+      'table.links td.action { width: 16px; text-align: right; }' \
+      'table.links a { color: #00c; text-decoration: underline; }' \
+      '.footer { text-align: center; font-size: 11px; color: #555; margin-top: 30px; }' \
+      '.flash { max-width: 560px; margin: 10px auto; padding: 6px 10px; border: 1px solid #888; background: #ffd; text-align: center; }' \
+      '.flash.alert { background: #fdd; }' \
+      'h1 { font-size: 18px; }' \
+      > app/assets/stylesheets/application.css \
+  && echo '<div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><p style="text-align:center;">Hello <%= @name %>! <%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
+  # Links index — classic table look
+  && sed -i 's|<h1>Links</h1>|<div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div>\n<%= form_with url: links_path, method: :get, local: true, class: "url-form" do \|f\| %><%= f.text_field :q, value: "http://" %><%= f.submit "Add [+]" %><% end %>\n<div class="nav"><a href="#">Neueste Links</a><a href="#">Link Finden</a><a href="#">Kategorie</a><a href="#">Tags</a></div>|g' app/views/links/index.html.erb \
+  && sed -i 's|<div id="links">|<table class="links"><tbody id="links">|g' app/views/links/index.html.erb \
+  && sed -i 's|<%= link_to "New link", new_link_path %>|</tbody></table><p style="text-align:center;"><%= link_to "New Link", new_link_path, class: "btn" %></p>|g' app/views/links/index.html.erb \
+  && sed -i 's|<div id="<%= dom_id link %>">|<tr id="<%= dom_id link %>"><td class="favicon"><% if link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= link.link_favicon.icon %>" alt="" width="16" height="16" /><% end %></td><td><%= link_to link.url, link %></td><td class="action"><%= link_to "[+]", new_link_link_tag_path(link) rescue "" %></td></tr><div style="display:none">|g' app/views/links/_link.html.erb \
+  && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence \|\| "http://")|g' app/views/links/_form.html.erb \
+  && sed -i 's|<h1>New link</h1>|<div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><h1>New Link</h1>|g' app/views/links/new.html.erb \
+  && sed -i 's|<h1>Editing link</h1>|<div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
+  && sed -i 's|<%= render @link %>|<%= render @link %>\n<h3>Tags</h3>\n<ul>\n  <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n    <li><%= lt.tag.name %></li>\n  <% end %>\n</ul>\n<%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "url-form" do \|f\| %>\n  <%= f.text_field :tag_name, placeholder: "New tag", required: true %>\n  <%= f.submit "Add Tag" %>\n<% end %>|g' app/views/links/show.html.erb \
+  # LinkTag
+  && sed -i 's|resources :links|resources :links do\n    resources :link_tags, only: [:create]\n  end|g' config/routes.rb \
+  && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource :link\n|g' app/controllers/link_tags_controller.rb \
+  && sed -i 's|def create|def create\n    tag = Tag.find_or_create_by(name: params[:tag_name]) { \|t\| t.active = true }\n    @link_tag = @link.link_tags.find_or_create_by(tag: tag) { \|lt\| lt.active = true }\n    redirect_to @link, notice: "Tag added."\n  end\n\n  def _create_disabled|g' app/controllers/link_tags_controller.rb \
+  && sed -i 's/ end/ can :manage, LinkTag\n end/g' app/models/ability.rb \
+  && echo -e "<% flash.each do |key, value| %>\n  <div class=\"flash <%= key == 'notice' ? 'notice' : 'alert' %>\"><%= value %></div>\n<% end %>" > app/views/layouts/_flash.html.erb \
+  && sed -i 's|<body>|<body>\n <%= render "layouts/flash" %>\n <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->|g' app/views/layouts/application.html.erb \
+  && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
+  && bundle exec rails assets:precompile
+# Data Migration: add mysql2 and a Rake task to import legacy links from a MySQL DB
+# (credentials/table read from ENV). Run with: bundle exec rails data:import
+RUN bundle add mysql2 \
+  && bundle exec rails generate task data import \
+  && sed -i '/task import: :environment do/a \ \ require "mysql2"\n\n client = Mysql2::Client.new(host: ENV.fetch("DB_HOSTNAME"), username: ENV.fetch("DB_USERNAME"), password: ENV.fetch("DB_PASSWORD"), database: ENV.fetch("DB_DATABASE"))\n puts "Importing links ..."\n client.query("SELECT * FROM #{ENV.fetch(\"DB_TABLENAME\")};").each do |row|\n Link.create!(url: row["URL"], active: row["Active"])\n end' lib/tasks/data.rake
+# Trigger the import task manually after the container is running:
+# bundle exec rails data:import
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev libmariadb-dev openssl \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
+RUN mkdir config/certificates \
+  && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -days 365
+
+ENV RAILS_ENV=production
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --insecure --fail https://localhost:3000/up || exit 1
+
+CMD ["bundle", "exec", "rails", "server", "-b", "ssl://0.0.0.0:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt", "-p", "3000"]
