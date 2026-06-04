@@ -41,7 +41,7 @@ RUN bundle exec rails generate scaffold Link url:string \
   && bundle exec rails generate scaffold Tag active:boolean name:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n has_many :link_tags\n has_many :links, through: :link_tags/g' app/models/tag.rb \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource\n|g' app/controllers/tags_controller.rb \
-  && sed -i 's|<h1>Tags</h1>|<%= render "application/logo" %><h1>Tags</h1>|g' app/views/tags/index.html.erb \
+  && sed -i 's|<h1>Tags</h1>|<h1>Tags</h1>|g' app/views/tags/index.html.erb \
   && sed -i 's/ end/ can :read, Tag, active: true\n end/g' app/models/ability.rb \
   && bundle exec rails generate scaffold LinkTag active:boolean link:references tag:references \
   && bundle exec rails generate model LinkFavicon icon:text link:references \
@@ -53,7 +53,7 @@ RUN bundle exec rails generate scaffold Link url:string \
 # Shared views directory for application-wide partials
 RUN mkdir app/views/application/
 # Layout: wrap content in a centered <main> container (no Bootstrap)
-RUN sed -i 's|<%= yield %>|<main class="container">\n      <%= yield %>\n    <footer class="footer">Version: Rails Alpha 0.87.7 \&copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>\n    </main>|g' app/views/layouts/application.html.erb
+RUN sed -i 's|<%= yield %>|<main class="container">\n      <%= render "application/logo" %>\n      <%= yield %>\n      <%= render "application/footer" %>\n    </main>|g' app/views/layouts/application.html.erb
 # Welcome page + retro UI (plain CSS, classic "L1nks" look):
 # - generate a welcome#index controller/view and set it as the root route
 # - authorize the welcome action (no model class) and default @name to "World"
@@ -78,7 +78,7 @@ RUN bundle exec rails generate controller welcome index \
       '.url-form input[type=text] { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 13px; }' \
       '.url-form input[type=submit], .btn { padding: 4px 10px; border: 1px solid #888; background: #f3f3f3; cursor: pointer; font-size: 13px; }' \
       '.nav { margin: 10px 0 14px; font-size: 13px; }' \
-      '.nav a { color: #00c; margin-right: 14px; text-decoration: underline; }' \
+      '.nav a { color: #00c; margin-right: 14px; text-decoration: none; }' \
       'table.links { width: 100%; border-collapse: collapse; }' \
       'table.links tr:nth-child(odd) { background: #eee; }' \
       'table.links tr:nth-child(even) { background: #f7f7f7; }' \
@@ -93,11 +93,13 @@ RUN bundle exec rails generate controller welcome index \
       > app/assets/stylesheets/application.css \
   # Shared logo partial used across views
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
-  && echo '<%= render "application/logo" %><p style="text-align:center;">Hello <%= @name %>!y/p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
+  # Shared footer partial used across views
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.8 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   # Links index
   && echo '<%= form_with model: Link.new, url: links_path, method: :post, local: true, class: "url-form" do |f| %><%= f.text_field :url, value: "https://" %><%= f.submit "Add [+]" %><% end %>' > app/views/links/_new_form.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><a href="#">🔍 Link Finden</a><a href="#">📂 Kategorie</a><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/links/_nav.html.erb \
-  && sed -i 's|<h1>Links</h1>|<%= render "application/logo" %>\n<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
+  && sed -i 's|<h1>Links</h1>|<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
   && sed -i '/notice/d' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<table class="links">\n  <tbody id="links">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|  </tbody>\n</table>|g' app/views/links/index.html.erb \
@@ -108,9 +110,9 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/^  <div>$/d; /^  <\/div>$/d' app/views/links/_link.html.erb \
   && sed -i 's/<\/div>/    <\/tr>/g; /^  <\/div>$/d' app/views/links/_link.html.erb \
   && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence \|\| "http://")|g' app/views/links/_form.html.erb \
-  && sed -i 's|<h1>New link</h1>|<%= render "application/logo" %><h1>New Link</h1>|g' app/views/links/new.html.erb \
-  && sed -i 's|<h1>Editing link</h1>|<%= render "application/logo" %><h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
-  && sed -i 's|<%= render @link %>|<%= render "application/logo" %>\n<%= render @link %>\n<h3>Tags</h3>\n<ul>\n  <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n    <li><%= lt.tag.name %></li>\n  <% end %>\n</ul>\n<%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "url-form" do \|f\| %>\n  <%= f.text_field :tag_name, placeholder: "New tag", required: true %>\n  <%= f.submit "Add Tag" %>\n<% end %>|g' app/views/links/show.html.erb \
+  && sed -i 's|<h1>New link</h1>|<h1>New Link</h1>|g' app/views/links/new.html.erb \
+  && sed -i 's|<h1>Editing link</h1>|<h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
+  && sed -i 's|<%= render @link %>|<%= render @link %>\n<h3>Tags</h3>\n<ul>\n  <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n    <li><%= lt.tag.name %></li>\n  <% end %>\n</ul>\n<%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "url-form" do \|f\| %>\n  <%= f.text_field :tag_name, placeholder: "New tag", required: true %>\n  <%= f.submit "Add Tag" %>\n<% end %>|g' app/views/links/show.html.erb \
   # LinkTag
   && sed -i 's|resources :links|resources :links do\n    resources :link_tags, only: [:create]\n  end|g' config/routes.rb \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource :link\n|g' app/controllers/link_tags_controller.rb \
