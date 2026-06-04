@@ -38,6 +38,7 @@ RUN bundle exec rails generate scaffold Link url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
   && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
   && sed -i 's/@link = Link.new(link_params)/@link = Link.new(link_params)\n  @link.account = current_account if account_signed_in?\n  @link.active = true/g' app/controllers/links_controller.rb \
+  && sed -i 's|redirect_to @link, notice: "Link was successfully created."|redirect_to links_path, notice: "Link was successfully created."|g' app/controllers/links_controller.rb \
   && sed -i 's/initialize(user)/initialize(account)\n account ||= Account.new # guest account/g' app/models/ability.rb \
   && sed -i 's/ end/ can :read, Link, active: true\n end/g' app/models/ability.rb \
   && bundle exec rails generate scaffold Tag active:boolean name:string \
