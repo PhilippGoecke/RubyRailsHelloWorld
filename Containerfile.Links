@@ -58,9 +58,8 @@ RUN sed -i 's|<%= yield %>|<main class="container">\n <%= yield %>\n </main>\n <
 # - generate a welcome#index controller/view and set it as the root route
 # - authorize the welcome action (no model class) and default @name to "World"
 # - allow everyone to read :welcome and create/read Link via Ability
-# - write a plain CSS stylesheet that mimics the classic screenshot
+# - write a plain CSS stylesheet
 # - style the Links index, form, new, and edit pages with simple classes
-# - pre-fill the URL field with "https://" when empty
 # - add a flash partial rendered in the layout
 # - add a static Impressum page and precompile assets
 RUN bundle exec rails generate controller welcome index \
