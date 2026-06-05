@@ -96,10 +96,10 @@ RUN bundle exec rails generate controller welcome index \
   # Shared footer partial used across views
   && echo '<footer class="footer">Version: Rails Alpha 0.87.11 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
-  && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/links/_nav.html.erb \
+  && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/application/_nav.html.erb \
   # Links index
   && echo '<%= form_with model: Link.new, url: links_path, method: :post, local: true, class: "url-form" do |f| %><%= f.text_field :url, value: "https://" %><%= f.submit "Add [+]" %><% end %>' > app/views/links/_new_form.html.erb \
-  && sed -i 's|<h1>Links</h1>|<%= render "links/new_form" %>\n<%= render "links/nav" %>|g' app/views/links/index.html.erb \
+  && sed -i 's|<h1>Links</h1>|<%= render "links/new_form" %>\n<%= render "application/nav" %>|g' app/views/links/index.html.erb \
   && sed -i '/notice/d' app/views/links/index.html.erb \
   && sed -i 's|<div id="links">|<table class="links">\n  <tbody id="links">|g' app/views/links/index.html.erb \
   && sed -i 's|<%= link_to "New link", new_link_path %>|  </tbody>\n</table>|g' app/views/links/index.html.erb \
