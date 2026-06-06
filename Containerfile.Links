@@ -44,7 +44,6 @@ RUN bundle exec rails generate scaffold Link url:string \
   && bundle exec rails generate scaffold Tag active:boolean name:string \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  has_many :link_tags\n  has_many :links, through: :link_tags\n  validates :name, presence: true, uniqueness: true/g' app/models/tag.rb \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource\n|g' app/controllers/tags_controller.rb \
-  && sed -i 's|<h1>Tags</h1>|<h1>Tags</h1>|g' app/views/tags/index.html.erb \
   && sed -i 's/  end/    can :read, Tag, active: true\n  end/g' app/models/ability.rb \
   && bundle exec rails generate scaffold LinkTag active:boolean link:references tag:references \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :link\n  belongs_to :tag\n  validates :link_id, uniqueness: { scope: :tag_id, message: "should have only one tag per link" }/g' app/models/link_tag.rb \
