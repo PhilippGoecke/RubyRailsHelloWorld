@@ -111,7 +111,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<div id="<%= dom_id link %>">|<tr id="<%= dom_id link %>">\n      <td class="favicon"><%= link_to link do %><% if link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= link.link_favicon.icon %>" alt="" width="16" height="16" /><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"></span><% end %><% end %></td>\n      <td><%= link_to link.url, link.url, target: "_blank", rel: "noopener noreferrer" %></td>\n      <td class="action"><%= link_to "[+]", new_link_link_tag_path(link) rescue "" %></td>|g' app/views/links/_link.html.erb \
   && sed -i '/strong/,/%= link.url/d' app/views/links/_link.html.erb \
   && sed -i '/^  <div>$/d; /^  <\/div>$/d' app/views/links/_link.html.erb \
-  && sed -i 's/<\/div>/    <\/tr>/g; /^  <\/div>$/d' app/views/links/_link.html.erb \
+  && sed -i 's/<\/div>/    <\/tr>/g' app/views/links/_link.html.erb \
   && sed -i 's|form.text_field :url|form.text_field :url, value: (link.url.presence \|\| "http://")|g' app/views/links/_form.html.erb \
   && rm app/views/links/new.html.erb \
   && rm app/views/links/edit.html.erb \
