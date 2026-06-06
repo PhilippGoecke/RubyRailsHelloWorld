@@ -97,7 +97,7 @@ RUN bundle exec rails generate controller welcome index \
   # Shared logo partial used across views
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.15 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.16 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/application/_nav.html.erb \
   # Links index
@@ -146,6 +146,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/Show this tag/d' app/views/tags/index.html.erb \
   && sed -i '/New tag/d' app/views/tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]+</p>||g' app/views/tags/index.html.erb \
+  && sed -i 's|<h1>Tags</h1>|<h1>Tag Cloud</h1>|g' app/views/tags/index.html.erb \
   && sed -i '/strong/d' app/views/tags/_tag.html.erb \
   && sed -i 's/<%= tag.name %>/<%= link_to tag.name, links_tag_path(tag) %>/g' app/views/tags/_tag.html.erb \
   # Other
