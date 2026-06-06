@@ -118,6 +118,8 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<h1>Editing link</h1>|<h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
   && sed -i 's|<%= render @link %>|<%= render @link %>\n<h3>Tags</h3>\n<ul>\n  <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n    <li><%= link_to lt.tag.name, tag_path(lt.tag) %></li>\n  <% end %>\n</ul>\n<%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "url-form" do \|f\| %>\n  <%= f.text_field :tag_name, placeholder: "New tag", required: true %>\n  <%= f.submit "Add Tag" %>\n<% end %>|g' app/views/links/show.html.erb \
   && sed -i 's|<%= render|<%= render "links/new_form" %>\n<%= render "application/nav" %>\n<%= render|g' app/views/links/show.html.erb \
+  && sed -i '/Edit this link/,/Back to links/,/Destroy this link/d' app/views/links/show.html.erb \
+  && sed -i -E ':a;N;$!ba;s|<div[^>]*>[[:space:]\n]+</div>||g' app/views/links/show.html.erb \
   # Links Search
   && cp app/views/links/index.html.erb app/views/links/search.html.erb \
   && echo '<%= form_with url: search_links_path, method: :get, local: true, class: "url-form" do |f| %><%= f.text_field :q, value: params[:q], placeholder: "Find URL..." %><%= f.submit "Find [?]" %><% end %>' > app/views/links/_search_form.html.erb \
