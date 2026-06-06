@@ -3,6 +3,8 @@
 # ============================================================================
 FROM rails:base as install
 
+WORKDIR /rails/links
+
 # Initialize a new Rails app in the current working directory:
 # --force            : overwrite any existing files without prompting
 # --skip-git         : do not create a .gitignore / git repo
@@ -172,7 +174,7 @@ COPY --from=install $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 COPY --from=install /rails/demo /rails/demo
 
-WORKDIR /rails/demo
+WORKDIR /rails/links
 
 RUN mkdir config/certificates \
   && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -days 365
