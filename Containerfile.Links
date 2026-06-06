@@ -126,7 +126,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's/ end/ can :create, LinkTag\n end/g' app/models/ability.rb \
   && sed -i '/Active/,/%= tag.active/d' app/views/tags/_tag.html.erb \
   && sed -i '/^  <div>$/d; /^  <\/div>$/d' app/views/tags/_tag.html.erb \
-  && sed -i '/Show this link tag/,/New tag/,/Show this tag/d' app/views/link_tags/index.html.erb \
+  && sed -i '/Show this link tag/d' app/views/link_tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]*</p>||g' app/views/link_tags/index.html.erb \
   && sed -i '/New tag/,/Show this tag/d' app/views/tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]*</p>||g' app/views/tags/index.html.erb \
