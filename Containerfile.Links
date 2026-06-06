@@ -143,7 +143,8 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/Show this link tag/d' app/views/link_tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]+</p>||g' app/views/link_tags/index.html.erb \
   # Tag
-  && sed -i '/Show this tag/,/New tag/d' app/views/tags/index.html.erb \
+  && sed -i '/Show this tag/d' app/views/tags/index.html.erb \
+  && sed -i '/New tag/d' app/views/tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]+</p>||g' app/views/tags/index.html.erb \
   && sed -i '/strong/d' app/views/tags/_tag.html.erb \
   && sed -i 's/<%= tag.name %>/<%= link_to tag.name, links_tag_path(tag) %>/g' app/views/tags/_tag.html.erb \
