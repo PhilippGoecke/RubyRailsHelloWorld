@@ -127,8 +127,9 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|resources :links|resources :links do\n    collection do\n      get :search\n    end\n  end|g' config/routes.rb \
   && sed -i 's|def index|def search\n    @links = Link.where(active: true).where("url LIKE ?", "%#{params[:q]}%") if params[:q].present?\n    @links \|\|= Link.none\n    authorize! :read, Link\n    render :search\n  end\n\n  def index|g' app/controllers/links_controller.rb \
   # LinkTag
+  && sed -i '/resources :link_tags/d' config/routes.rb \
   && sed -i 's|resources :links do|resources :links do\n    resources :link_tags, only: [:create]|g' config/routes.rb \
-  && sed -i 's|resources :tags|resources :tags do\n    member do\n      get :links\n    end\n  end|g' config/routes.rb \
+  && sed -i 's|resources :tags|resources :tags, only: [:index, :create] do\n    member do\n      get :links\n    end\n  end|g' config/routes.rb \
   && sed -i 's|ApplicationController|ApplicationController\n  load_and_authorize_resource :link\n|g' app/controllers/link_tags_controller.rb \
   && sed -i 's|def create|def create\n    tag = Tag.find_or_create_by(name: params[:tag_name]) { \|t\| t.active = true }\n    @link_tag = @link.link_tags.find_or_create_by(tag: tag) { \|lt\| lt.active = true }\n    redirect_to @link, notice: "Tag added."\n  end\n\n  def _create_disabled|g' app/controllers/link_tags_controller.rb \
   && sed -i 's/  end/    can :create, LinkTag\n  end/g' app/models/ability.rb \
