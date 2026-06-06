@@ -3,6 +3,7 @@
 # ============================================================================
 FROM rails:base as install
 
+RUN mv /rails/demo /rails/links
 WORKDIR /rails/links
 
 # Initialize a new Rails app in the current working directory:
