@@ -173,7 +173,7 @@ USER $USER
 # copy rbenv, Ruby and Rails App from install stage
 COPY --from=install $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
-COPY --from=install /rails/demo /rails/demo
+COPY --from=install /rails/links /rails/links
 
 WORKDIR /rails/links
 
