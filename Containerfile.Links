@@ -98,7 +98,7 @@ RUN bundle exec rails generate controller welcome index \
   # Shared logo partial used across views
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.12 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.13 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/application/_nav.html.erb \
   # Links index
@@ -117,6 +117,7 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<h1>New link</h1>|<h1>New Link</h1>|g' app/views/links/new.html.erb \
   && sed -i 's|<h1>Editing link</h1>|<h1>Editing Link</h1>|g' app/views/links/edit.html.erb \
   && sed -i 's|<%= render @link %>|<%= render @link %>\n<h3>Tags</h3>\n<ul>\n  <% @link.link_tags.where(active: true).includes(:tag).each do \|lt\| %>\n    <li><%= link_to lt.tag.name, tag_path(lt.tag) %></li>\n  <% end %>\n</ul>\n<%= form_with url: link_link_tags_path(@link), method: :post, local: true, class: "url-form" do \|f\| %>\n  <%= f.text_field :tag_name, placeholder: "New tag", required: true %>\n  <%= f.submit "Add Tag" %>\n<% end %>|g' app/views/links/show.html.erb \
+  && sed -i 's|<%= render|<%= render "links/new_form" %>\n<%= render "application/nav" %>\n<%= render|g' app/views/links/show.html.erb \
   # Links Search
   && cp app/views/links/index.html.erb app/views/links/search.html.erb \
   && echo '<%= form_with url: search_links_path, method: :get, local: true, class: "url-form" do |f| %><%= f.text_field :q, value: params[:q], placeholder: "Find URL..." %><%= f.submit "Find [?]" %><% end %>' > app/views/links/_search_form.html.erb \
@@ -163,6 +164,7 @@ FROM debian:trixie-slim as rails
 # install dependencies
 RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev libmariadb-dev openssl \
+  && apt install -y --no-install-recommends --no-install-suggests nano \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
