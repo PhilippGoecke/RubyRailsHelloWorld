@@ -128,6 +128,8 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i '/^  <div>$/d; /^  <\/div>$/d' app/views/tags/_tag.html.erb \
   && sed -i '/Show this link tag/,/New tag/,/Show this tag/d' app/views/link_tags/index.html.erb \
   && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]*</p>||g' app/views/link_tags/index.html.erb \
+  && sed -i '/New tag/,/Show this tag/d' app/views/tags/index.html.erb \
+  && sed -i -E ':a;N;$!ba;s|<p[^>]*>[[:space:]\n]*</p>||g' app/views/tags/index.html.erb \
   # Other
   && echo -e "<% flash.each do |key, value| %>\n  <div class=\"flash <%= key == 'notice' ? 'notice' : 'alert' %>\"><%= value %></div>\n<% end %>" > app/views/layouts/_flash.html.erb \
   && sed -i 's|<body>|<body>\n    <%= render "layouts/flash" %>\n    <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->|g' app/views/layouts/application.html.erb \
