@@ -196,4 +196,5 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=35s --timeout=4s CMD curl --insecure --fail https://localhost:3000/up || exit 1
 
-CMD ["sh", "-c", "bundle exec rails db:migrate 2>&1 || true && exec bundle exec rails server -b ssl://0.0.0.0:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt"]
+#CMD ["sh", "-c", "bundle exec rails db:migrate 2>&1 || true && exec bundle exec rails server -b ssl://0.0.0.0:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt"]
+CMD ["bundle", "exec", "rails", "server", "-b", "ssl://0.0.0.0:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt"]
