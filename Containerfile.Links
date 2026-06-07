@@ -36,7 +36,7 @@ RUN bundle add cancancan \
 # and run migrations.
 RUN bundle exec rails generate scaffold Link url:string \
   && sed -i 's/ApplicationController/ApplicationController\n load_and_authorize_resource\n/g' app/controllers/links_controller.rb \
-  && sed -i 's/@links = Link.all/@links = Link.where(active: true)/g' app/controllers/links_controller.rb \
+  && sed -i 's/@links = Link.all/@links = Link.where(active: true).order(created_at: :desc)\n  @links = @links.limit(15) unless account_signed_in? || params[:all].present?/g' app/controllers/links_controller.rb \
   && sed -i 's/@link = Link.new(link_params)/existing_link = Link.find_by(url: link_params[:url])\n  if existing_link\n  redirect_to existing_link, notice: "Link already exists" and return\n  end\n  @link = Link.new(link_params)\n  @link.account = current_account if account_signed_in?\n  @link.active = true/g' app/controllers/links_controller.rb \
   && sed -i 's|redirect_to @link, notice: "Link was successfully created."|redirect_to links_path, notice: "Link was successfully created."|g' app/controllers/links_controller.rb \
   && sed -i 's/initialize(user)/initialize(account)\n    account ||= Account.new # guest account/g' app/models/ability.rb \
@@ -98,9 +98,9 @@ RUN bundle exec rails generate controller welcome index \
   # Shared logo partial used across views
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.18 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.19 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
-  && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/application/_nav.html.erb \
+  && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><% if account_signed_in? %><%= link_to "📋 Alle Links", links_path(all: true) %><% end %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %></div>' > app/views/application/_nav.html.erb \
   # Links index
   && echo '<%= form_with model: Link.new, url: links_path, method: :post, local: true, class: "url-form" do |f| %><%= f.text_field :url, value: "https://" %><%= f.submit "Add [+]" %><% end %>' > app/views/links/_new_form.html.erb \
   && sed -i 's|<h1>Links</h1>|<%= render "links/new_form" %>\n<%= render "application/nav" %>|g' app/views/links/index.html.erb \
