@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.15.0
+ENV NODE_VERSION=24.17.0
 RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -91,4 +91,4 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:3000/up || exit 1
 
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+CMD ["bundle", "exec", "rails", "server", "-b", "[::]", "-p", "3000"]
