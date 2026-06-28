@@ -63,8 +63,40 @@ RUN bundle exec rails generate model Bookmark account:references link:references
   && sed -i 's/ApplicationController/ApplicationController\n  before_action :authenticate_account!\n  load_and_authorize_resource\n/g' app/controllers/bookmarks_controller.rb \
   && sed -i 's/def index/def index\n    @bookmarks = current_account.bookmarks.includes(:link).all\n  end\n\n  def create\n    @link = Link.find(params[:link_id])\n    @bookmark = current_account.bookmarks.find_or_create_by(link: @link)\n    redirect_to @link, notice: "Link bookmarked."\n  end\n\n  def destroy\n    @bookmark = Bookmark.find(params[:id])\n    @bookmark.destroy\n    redirect_to bookmarks_index_path, notice: "Bookmark removed."\n  end\n\n  def _index/g' app/controllers/bookmarks_controller.rb \
   && sed -i 's/  end/    can :manage, Bookmark, account_id: account.id\n  end/g' app/models/ability.rb \
-  && sed -i 's|resources :tags, only:|resources :bookmarks, only: [:index, :create, :destroy]\n  resources :tags, only:|g' config/routes.rb \
-  && RAILS_ENV=production bundle exec rails db:migrate \
+  && sed -i 's|resources :tags, only:|resources :bookmarks, only: [:index, :create, :destroy]\n  resources :tags, only:|g' config/routes.rb
+# Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
+# (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
+# migration filenames deterministic across builds so image layers stay cacheable and
+# schema.rb diffs are stable. Updates filenames and the `schema_migrations` references
+# in db/schema.rb (if present).
+RUN printf '%s\n' \
+      '#!/usr/bin/env ruby' \
+      '# Re-sequence Rails migration timestamps to deterministic, sequential IDs.' \
+      'require "fileutils"' \
+      'migrate_dir = File.expand_path("../db/migrate", __dir__)' \
+      'abort("No db/migrate directory") unless Dir.exist?(migrate_dir)' \
+      'files = Dir.children(migrate_dir).select { |f| f =~ /\A(\d+)_.+\.rb\z/ }.sort' \
+      'mapping = {}' \
+      'files.each_with_index do |name, idx|' \
+      '  old_ts = name[/\A(\d+)_/, 1]' \
+      '  new_ts = format("%014d", idx + 1)' \
+      '  new_name = name.sub(/\A\d+_/, "#{new_ts}_")' \
+      '  next if old_ts == new_ts' \
+      '  FileUtils.mv(File.join(migrate_dir, name), File.join(migrate_dir, new_name))' \
+      '  mapping[old_ts] = new_ts' \
+      '  puts "[resequence] #{name} -> #{new_name}"' \
+      'end' \
+      'schema = File.expand_path("../db/schema.rb", __dir__)' \
+      'if File.exist?(schema) && !mapping.empty?' \
+      '  content = File.read(schema)' \
+      '  mapping.each { |old_ts, new_ts| content.gsub!(old_ts, new_ts) }' \
+      '  File.write(schema, content)' \
+      '  puts "[resequence] updated db/schema.rb"' \
+      'end' \
+      > bin/resequence_migrations \
+  && chmod +x bin/resequence_migrations \
+  && ruby bin/resequence_migrations
+RUN RAILS_ENV=production bundle exec rails db:migrate \
   && echo '<h1>📋 Meine Merkliste</h1>\n<% if @bookmarks.any? %>\n  <table class="links">\n    <tbody>\n      <% @bookmarks.each do |bookmark| %>\n        <tr>\n          <td class="favicon"><% if bookmark.link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= bookmark.link.link_favicon.icon %>" alt="" width="16" height="16" \/><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"><\/span><% end %><\/td>\n          <td><%= link_to bookmark.link.url, bookmark.link.url, target: "_blank", rel: "noopener noreferrer" %><\/td>\n          <td class="action"><%= button_to "❌", bookmark_path(bookmark), method: :delete, data: { confirm: "Sicher?" }, form: { style: "display: inline;" } %><\/td>\n        <\/tr>\n      <% end %>\n    <\/tbody>\n  <\/table>\n<% else %>\n  <p style="text-align: center;">Noch keine Links gemerkt. <%= link_to "Jetzt einen hinzufügen →", links_path %><\/p>\n<% end %>' > app/views/bookmarks/index.html.erb
 RUN mkdir app/views/application/
 # Layout: wrap content in a centered <main> container (no Bootstrap)
