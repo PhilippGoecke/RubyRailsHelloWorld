@@ -15,13 +15,11 @@ RUN bundle exec rails new . --force --skip-git --database=sqlite3 --skip-javascr
 # Devise: add authentication gem, run installer, generate Account model, and apply migrations
 RUN bundle add devise \
   && bundle exec rails generate devise:install \
-  && bundle exec rails generate devise Account \
-  && RAILS_ENV=production bundle exec rails db:migrate
+  && bundle exec rails generate devise Account
 # OTP: optional two-factor authentication for Devise (currently disabled)
 #RUN bundle add devise-otp \
 # && bundle exec rails g devise_otp:install \
 # && bundle exec rails g devise_otp Account \
-# && RAILS_ENV=production bundle exec rails db:migrate
 # CanCanCan: authorization gem; generate Ability class and patch ApplicationController
 # to enforce CSRF protection, require authorization on all non-Devise controllers,
 # wire current_ability to current_account, and handle AccessDenied by redirecting
