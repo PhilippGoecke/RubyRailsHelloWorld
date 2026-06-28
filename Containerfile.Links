@@ -25,7 +25,7 @@ RUN bundle add devise \
 # CanCanCan: authorization gem; generate Ability class and patch ApplicationController
 # to enforce CSRF protection, require authorization on all non-Devise controllers,
 # wire current_ability to current_account, and handle AccessDenied by redirecting
-# guests to sign in or returning forbidden for unauthorized authenticated users.
+# guests to sign in or returning forbidden for unauthorized authenticated accounts.
 RUN bundle add cancancan \
   && rails generate cancan:ability \
   && sed -i 's/end/\n  protect_from_forgery with: :exception\n  check_authorization unless: :devise_controller?\n\n  def current_ability\n    @current_ability ||= ::Ability.new(current_account)\n  end\n\n  rescue_from CanCan::AccessDenied do |exception|\n    if current_account.nil?\n      session[:account_return_to] = request.fullpath\n      redirect_to new_account_session_url, alert: "You have to log in to continue."\n    else\n      respond_to do |format|\n        format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }\n        format.json { head :forbidden }\n        format.js { head :forbidden }\n      end\n    end\n  end\n\nend/g' app/controllers/application_controller.rb
@@ -54,7 +54,7 @@ RUN bundle exec rails generate scaffold Link url:string \
   && bundle exec rails generate migration AddAccountToLink account:references active:boolean \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account, optional: true\n  has_many :link_tags\n  has_many :tags, through: :link_tags\n  has_one :link_favicon\n  validates :url, presence: true, uniqueness: true, format: { with: \/\\Ahttps?:\\\/\\\/.+\\z\/, message: "must start with http:\/\/ or https:\/\/" }\n  after_create :build_favicon\n\n  def build_favicon\n    LinkFavicon.download_for(self)\n  end/g' app/models/link.rb \
   && sed -i 's/null: false/null: true/g' db/migrate/*_add_account_to_link.rb
-# Bookmarks: add Bookmark model for authenticated users to bookmark links
+# Bookmarks: add Bookmark model for authenticated accounts to bookmark links
 RUN bundle exec rails generate model Bookmark account:references link:references \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  belongs_to :account\n  belongs_to :link\n  validates :account_id, uniqueness: { scope: :link_id, message: "can only bookmark a link once" }/g' app/models/bookmark.rb \
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  has_many :bookmarks, dependent: :destroy\n  has_many :bookmarked_links, through: :bookmarks, source: :link/g' app/models/account.rb \
@@ -62,7 +62,7 @@ RUN bundle exec rails generate model Bookmark account:references link:references
   && bundle exec rails generate controller bookmarks index \
   && sed -i 's/ApplicationController/ApplicationController\n  before_action :authenticate_account!\n  load_and_authorize_resource\n/g' app/controllers/bookmarks_controller.rb \
   && sed -i 's/def index/def index\n    @bookmarks = current_account.bookmarks.includes(:link).all\n  end\n\n  def create\n    @link = Link.find(params[:link_id])\n    @bookmark = current_account.bookmarks.find_or_create_by(link: @link)\n    redirect_to @link, notice: "Link bookmarked."\n  end\n\n  def destroy\n    @bookmark = Bookmark.find(params[:id])\n    @bookmark.destroy\n    redirect_to bookmarks_path, notice: "Bookmark removed."\n  end\n\n  def _index/g' app/controllers/bookmarks_controller.rb \
-  && sed -i 's/  end/    can :manage, Bookmark, account_id: user.id\n  end/g' app/models/ability.rb \
+  && sed -i 's/  end/    can :manage, Bookmark, account_id: account.id\n  end/g' app/models/ability.rb \
   && sed -i 's|resources :tags, only:|resources :bookmarks, only: [:index, :create, :destroy]\n  resources :tags, only:|g' config/routes.rb \
   && RAILS_ENV=production bundle exec rails db:migrate \
   && echo '<h1>📋 Meine Merkliste</h1>\n<% if @bookmarks.any? %>\n  <table class="links">\n    <tbody>\n      <% @bookmarks.each do |bookmark| %>\n        <tr>\n          <td class="favicon"><% if bookmark.link.link_favicon.present? %><img src="data:image\/x-icon;base64,<%= bookmark.link.link_favicon.icon %>" alt="" width="16" height="16" \/><% else %><span class="favicon-placeholder" style="display:inline-block;width:16px;height:16px;background:#ddd;border:1px solid #999;"><\/span><% end %><\/td>\n          <td><%= link_to bookmark.link.url, bookmark.link.url, target: "_blank", rel: "noopener noreferrer" %><\/td>\n          <td class="action"><%= button_to "❌", bookmark_path(bookmark), method: :delete, data: { confirm: "Sicher?" }, form: { style: "display: inline;" } %><\/td>\n        <\/tr>\n      <% end %>\n    <\/tbody>\n  <\/table>\n<% else %>\n  <p style="text-align: center;">Noch keine Links gemerkt. <%= link_to "Jetzt einen hinzufügen →", links_path %><\/p>\n<% end %>' > app/views/bookmarks/index.html.erb
