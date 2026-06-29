@@ -55,9 +55,8 @@ RUN bundle exec rails generate model Bookmark account:references link:references
   && sed -i 's/ApplicationRecord/ApplicationRecord\n  has_many :bookmarks, dependent: :destroy\n  has_many :bookmarked_links, through: :bookmarks, source: :link/g' app/models/account.rb \
   && sed -i 's/has_one :link_favicon/has_one :link_favicon\n  has_many :bookmarks, dependent: :destroy/g' app/models/link.rb \
   && bundle exec rails generate controller Bookmarks index \
-  #&& sed -i 's/ApplicationController/ApplicationController\n  before_action :authenticate_account!\n  load_and_authorize_resource\n/g' app/controllers/bookmarks_controller.rb \
   && sed -i 's/ApplicationController/ApplicationController\n  load_and_authorize_resource\n/g' app/controllers/bookmarks_controller.rb \
-  && sed -i 's/def index/def index\n    @bookmarks = current_account.bookmarks.includes(:link).all\n  end\n\n  def create\n    @link = Link.find(params[:link_id])\n    @bookmark = current_account.bookmarks.find_or_create_by(link: @link)\n    redirect_to @link, notice: "Link bookmarked."\n  end\n\n  def destroy\n    @bookmark = Bookmark.find(params[:id])\n    @bookmark.destroy\n    redirect_to bookmarks_path, notice: "Bookmark removed."\n  end\n\n  def _index/g' app/controllers/bookmarks_controller.rb \
+  && sed -i 's/def index/def index\n    @bookmarks = current_account.bookmarks.includes(:link).all\n  end\n\n  def create\n    @link = Link.find(params[:link_id])\n    @bookmark = current_account.bookmarks.find_or_create_by(link: @link)\n    redirect_to links_path, notice: "Link bookmarked."\n  end\n\n  def destroy\n    @bookmark = Bookmark.find(params[:id])\n    @bookmark.destroy\n    redirect_to links_path, notice: "Bookmark removed."\n  end\n\n  def _index/g' app/controllers/bookmarks_controller.rb \
   && sed -i 's/  end/    can :manage, Bookmark, account_id: account.id\n  end/g' app/models/ability.rb \
   && sed -i 's|get "bookmarks/index"|resources :bookmarks, only: [:index, :create, :destroy]|g' config/routes.rb
 # Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
@@ -140,7 +139,7 @@ RUN bundle exec rails generate controller welcome index \
   && ls app/views/ \
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.21 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.22 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><% if account_signed_in? %><%= link_to "📋 Alle Links", links_path(all: true) %><% end %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %><%= link_to "❤️ Merkliste", bookmarks_path if account_signed_in? %><%= link_to "🔐 Login", new_account_session_path unless account_signed_in? %></div>' > app/views/application/_nav.html.erb \
   # Links index
