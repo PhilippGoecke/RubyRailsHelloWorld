@@ -139,7 +139,7 @@ RUN bundle exec rails generate controller welcome index \
   && ls app/views/ \
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.25 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.24 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><% if account_signed_in? %><%= link_to "📋 Alle Links", links_path(all: true) %><% end %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %><%= link_to "❤️ Merkliste", bookmarks_path if account_signed_in? %><%= link_to "🔐 Login", new_account_session_path unless account_signed_in? %></div>' > app/views/application/_nav.html.erb \
   # Links index
@@ -198,6 +198,22 @@ RUN bundle exec rails generate controller welcome index \
   && sed -i 's|<body>|<body>\n    <%= render "layouts/flash" %>\n    <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->|g' app/views/layouts/application.html.erb \
   && echo "<h1>Impressum</h1><p>Impressum</p>" > public/impressum.html \
   && bundle exec rails assets:precompile
+# Admin: add admin flag to Account, restrict Accounts index/show to admins, and
+# provide a simple view to list all Devise users (accounts) for admins only.
+RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
+  && sed -i 's/admin :boolean/admin :boolean, default: false/g' db/migrate/*_add_admin_to_accounts.rb \
+  && ruby bin/resequence_migrations \
+  && RAILS_ENV=production bundle exec rails db:migrate \
+  && bundle exec rails generate controller Accounts index show \
+  && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!\n  load_and_authorize_resource\n|g' app/controllers/accounts_controller.rb \
+  && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def show\n    @account = Account.find(params[:id])\n  end\n\n  def _index_disabled|g' app/controllers/accounts_controller.rb \
+  && sed -i 's|end\z|  private\n\n  def require_admin!\n    redirect_to root_path, alert: "Admins only." unless current_account\&.admin?\n  end\nend|g' app/controllers/accounts_controller.rb \
+  && sed -i 's/  end/    can :manage, Account if account.admin?\n  end/g' app/models/ability.rb \
+  && sed -i 's|get "accounts/index"||g; s|get "accounts/show"||g' config/routes.rb \
+  && sed -i 's|devise_for :accounts|devise_for :accounts\n  resources :accounts, only: [:index, :show]|g' config/routes.rb \
+  && echo '<div style="text-align:center;"><h1>👥 Accounts</h1></div><%= render "application/nav" %><table class="links"><thead><tr><th>Email</th><th>Admin</th><th>Created</th><th></th></tr></thead><tbody><% @accounts.each do |account| %><tr><td><%= link_to account.email, account_path(account) %></td><td><%= account.admin? ? "✅" : "—" %></td><td><%= account.created_at.to_date %></td><td class="action"><%= link_to "Show", account_path(account) %></td></tr><% end %></tbody></table>' > app/views/accounts/index.html.erb \
+  && echo '<div style="text-align:center;"><h1>👤 Account</h1></div><%= render "application/nav" %><p><strong>Email:</strong> <%= @account.email %></p><p><strong>Admin:</strong> <%= @account.admin? ? "Yes" : "No" %></p><p><strong>Created:</strong> <%= @account.created_at %></p><p><strong>Links:</strong> <%= @account.links.count if @account.respond_to?(:links) %></p><p><%= link_to "← Back to Accounts", accounts_path %></p>' > app/views/accounts/show.html.erb \
+  && sed -i 's|<%= link_to "🔐 Login", new_account_session_path unless account_signed_in? %>|<%= link_to "🔐 Login", new_account_session_path unless account_signed_in? %><%= link_to "👥 Accounts", accounts_path if account_signed_in? \&\& current_account.admin? %>|g' app/views/application/_nav.html.erb
 # Data Migration: add mysql2 and a Rake task to import legacy links from a MySQL DB
 # (credentials/table read from ENV). Run with: bundle exec rails data:import
 RUN bundle add mysql2 \
