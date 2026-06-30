@@ -139,7 +139,7 @@ RUN bundle exec rails generate controller welcome index \
   && ls app/views/ \
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.24 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.25 &copy;2026 - <%= link_to "Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><% if account_signed_in? %><%= link_to "📋 Alle Links", links_path(all: true) %><% end %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %><%= link_to "❤️ Merkliste", bookmarks_path if account_signed_in? %><%= link_to "🔐 Login", new_account_session_path unless account_signed_in? %></div>' > app/views/application/_nav.html.erb \
   # Links index
@@ -166,7 +166,7 @@ RUN bundle exec rails generate controller welcome index \
   && echo '<%= form_with url: search_links_path, method: :get, local: true, class: "url-form" do |f| %><%= f.text_field :q, value: params[:q], placeholder: "Find URL..." %><%= f.submit "Find [?]" %><% end %>' > app/views/links/_search_form.html.erb \
   && sed -i 's|<%= render "links/new_form" %>|<%= render "links/search_form" %>|g' app/views/links/search.html.erb \
   && sed -i 's|resources :links|resources :links do\n    collection do\n      get :search\n    end\n    member do\n      patch :toggle_active\n    end\n  end|g' config/routes.rb \
-  && sed -i 's|def index|def search\n    @links = Link.where(active: true).where("url LIKE ?", "%#{params[:q]}%") if params[:q].present?\n    @links \|\|= Link.none\n    authorize! :read, Link\n    render :search\n  end\n\n  def toggle_active\n    @link = Link.find(params[:id])\n    authorize! :manage, @link\n    @link.update(active: !@link.active)\n    redirect_to links_path(all: true), notice: "Link status updated."\n  end\n\n  def index|g' app/controllers/links_controller.rb \
+  && sed -i 's|def index|def search\n    @links = Link.where(active: true).where("url LIKE ?", "%#{params[:q]}%") if params[:q].present?\n    @links \|\|= Link.none\n    authorize! :read, Link\n    render :search\n  end\n\n  def toggle_active\n    @link = Link.find(params[:id])\n    authorize! :manage, @link\n    enabled = params.fetch(:enabled, "true").to_s == "true"\n    if enabled\n      new_state = params.key?(:active) ? ActiveModel::Type::Boolean.new.cast(params[:active]) : !@link.active\n      @link.update(active: new_state)\n      redirect_to links_path(all: true), notice: "Link #{new_state ? "enabled" : "disabled"}."\n    else\n      redirect_to links_path(all: true), alert: "Toggle link is disabled."\n    end\n  end\n\n  def index|g' app/controllers/links_controller.rb \
   # LinkTag
   && sed -i '/resources :link_tags/d' config/routes.rb \
   && sed -i 's|resources :links do|resources :links do\n    resources :link_tags, only: [:create]|g' config/routes.rb \
