@@ -29,7 +29,7 @@ RUN bundle add cancancan \
 RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
   && sed -i 's/admin :boolean/admin :boolean, default: false/g' db/migrate/*_add_admin_to_accounts.rb \
   && bundle exec rails generate controller Accounts index show \
-  && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!\n  load_and_authorize_resource\n|g' app/controllers/accounts_controller.rb \
+  && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!, except: [:sign_out]\n  load_and_authorize_resource\n|g' app/controllers/accounts_controller.rb \
   && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def show\n    @account = Account.find(params[:id])\n  end\n\n  def _index_disabled|g' app/controllers/accounts_controller.rb \
   && sed -i 's|^end$|  private\n\n  def require_admin!\n    redirect_to root_path, alert: "Admins only." unless current_account\&.admin?\n  end\nend|' app/controllers/accounts_controller.rb \
   && sed -i 's/  end/    can :manage, Account if account.admin?\n  end/g' app/models/ability.rb \
@@ -152,7 +152,7 @@ RUN bundle exec rails generate controller welcome index \
   && ls app/views/ \
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.29 &copy; 2026 - <%= link_to "📋 Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.30 &copy; 2026 - <%= link_to "ℹ️ Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo '<div class="nav" style="text-align:center;"><%= link_to "🆕 Neueste Links", links_path %><% if account_signed_in? %><%= link_to "📋 Alle Links", links_path(all: true) %><% end %><%= link_to "🔍 Link Finden", search_links_path %><%= link_to "🏷️ Tags", tags_path %><%= link_to "❤️ Merkliste", bookmarks_path if account_signed_in? %><%= link_to "👥 Accounts", accounts_path if account_signed_in? && current_account.admin? %><% if account_signed_in? %><%= link_to "🔓 Logout", destroy_account_session_path(current_account), method: :delete %><% else %><%= link_to "🔐 Login", new_account_session_path %><% end %></div>' > app/views/application/_nav.html.erb \
   # Links index
