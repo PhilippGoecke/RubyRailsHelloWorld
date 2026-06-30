@@ -28,8 +28,6 @@ RUN bundle add cancancan \
 # provide a simple view to list all Devise users (accounts) for admins only.
 RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
   && sed -i 's/admin :boolean/admin :boolean, default: false/g' db/migrate/*_add_admin_to_accounts.rb \
-  && ruby bin/resequence_migrations \
-  && RAILS_ENV=production bundle exec rails db:migrate \
   && bundle exec rails generate controller Accounts index show \
   && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!\n  load_and_authorize_resource\n|g' app/controllers/accounts_controller.rb \
   && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def show\n    @account = Account.find(params[:id])\n  end\n\n  def _index_disabled|g' app/controllers/accounts_controller.rb \
