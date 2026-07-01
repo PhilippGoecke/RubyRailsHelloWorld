@@ -32,7 +32,7 @@ RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
   && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!\n  load_and_authorize_resource\n|g' app/controllers/accounts_controller.rb \
   && sed -i 's/devise_for :accounts/devise_for :accounts\n  devise_scope :account do\n    get "sign_out", to: "devise\/sessions#destroy"\n  end/g' config/routes.rb \
   && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def show\n    @account = Account.find(params[:id])\n  end\n\n  def _index_disabled|g' app/controllers/accounts_controller.rb \
-  && sed -i 's|^end$|\n  private\n\n  def require_admin!\n    redirect_to root_path, alert: "Admins only." unless current_account\&.admin?\n  end\nend|' app/controllers/accounts_controller.rb \
+  && sed -i 's|^end$|\n  private\n\n  def require_admin!\n    redirect_to root_path, alert: "Admins only." unless current_account\&.admin? \|\| [:sign_out].include?(action_name.to_sym)\n  end\nend|' app/controllers/accounts_controller.rb \
   && sed -i 's/  end/    can :manage, Account if account.admin?\n  end/g' app/models/ability.rb \
   && sed -i 's|get "accounts/index"||g; s|get "accounts/show"||g' config/routes.rb \
   && sed -i 's|devise_for :accounts|devise_for :accounts\n  resources :accounts, only: [:index, :show]|g' config/routes.rb \
