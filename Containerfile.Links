@@ -31,7 +31,8 @@ RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
   && bundle exec rails generate controller Users index show \
   && sed -i 's|ApplicationController|ApplicationController\n  before_action :authenticate_account!\n  before_action :require_admin!\n  load_and_authorize_resource :account, class: "Account"\n|g' app/controllers/users_controller.rb \
   #&& sed -i 's/devise_for :accounts/devise_for :accounts\n  end/g' config/routes.rb \
-  && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def show\n    @account = Account.find(params[:id])\n  end\n\n  def _index_disabled|g' app/controllers/users_controller.rb \
+  && sed -i 's|def index|def index\n    @accounts = Account.order(created_at: :desc)\n  end\n\n  def _index_disabled|g' app/controllers/users_controller.rb \
+  && sed -i 's|def show|def show\n    @account = Account.find(params[:id])\n  end\n\n  def _show_disabled|g' app/controllers/users_controller.rb \
   && sed -i 's|^end$|\n  private\n\n  def require_admin!\n    redirect_to root_path, alert: "Admins only." unless current_account\&.admin?\n  end\nend|' app/controllers/users_controller.rb \
   && sed -i 's/  end/    can :manage, Account if account.admin?\n  end/g' app/models/ability.rb \
   && sed -i 's|get "users/index"||g; s|get "users/show"||g' config/routes.rb \
