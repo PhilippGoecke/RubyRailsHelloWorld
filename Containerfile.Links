@@ -23,33 +23,7 @@ RUN bundle add devise \
 # guests to sign in or returning forbidden for unauthorized authenticated accounts.
 RUN bundle add cancancan \
   && rails generate cancan:ability \
-  && cat >> app/controllers/application_controller.rb << 'EOFPATCH'
-
-  protect_from_forgery with: :exception
-  check_authorization unless: :devise_controller? && :devise_action?
-
-  def devise_action?
-    [:sign_out, :destroy].include?(action_name.to_sym)
-  end
-
-  def current_ability
-    @current_ability ||= ::Ability.new(current_account)
-  end
-
-  rescue_from CanCan::AccessDenied do |exception|
-    if current_account.nil?
-      session[:account_return_to] = request.fullpath
-      redirect_to new_account_session_url, alert: "You have to log in to continue."
-    else
-      respond_to do |format|
-        format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }
-        format.json { head :forbidden }
-        format.js { head :forbidden }
-      end
-    end
-  end
-EOFPATCH
-
+  && sed -i 's/end/\n  protect_from_forgery with: :exception\n  check_authorization unless: :devise_controller?\n\n  def current_ability\n    @current_ability ||= ::Ability.new(current_account)\n  end\n\n  rescue_from CanCan::AccessDenied do |exception|\n    if current_account.nil?\n      session[:account_return_to] = request.fullpath\n      redirect_to new_account_session_url, alert: "You have to log in to continue."\n    else\n      respond_to do |format|\n        format.html { redirect_to Rails.application.routes.url_helpers.root_path, alert: exception.message }\n        format.json { head :forbidden }\n        format.js { head :forbidden }\n      end\n    end\n  end\n\nend/g' app/controllers/application_controller.rb
 # Admin: add admin flag to Account, restrict Accounts index/show to admins, and
 # provide a simple view to list all Devise users (accounts) for admins only.
 RUN bundle exec rails generate migration AddAdminToAccounts admin:boolean \
@@ -178,7 +152,7 @@ RUN bundle exec rails generate controller welcome index \
   && ls app/views/ \
   && echo '<%= link_to links_path, class: "logo-link", style: "text-decoration: none;" do %><div class="logo"><span class="l1">L</span><span class="l2">1</span><span class="n">n</span><span class="k">k</span><span class="s">s</span></div><% end %>' > app/views/application/_logo.html.erb \
   # Shared footer partial used across views
-  && echo '<footer class="footer">Version: Rails Alpha 0.87.32 &copy; 2026 - <%= link_to "ℹ️ Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
+  && echo '<footer class="footer">Version: Rails Alpha 0.87.33 &copy; 2026 - <%= link_to "ℹ️ Impressum", "/impressum.html" %></footer>' > app/views/application/_footer.html.erb \
   && echo '<p style="text-align:center;">Hello <%= @name %>!</p><p style="text-align:center;"><%= link_to "Go to Links", links_path %></p>' > app/views/welcome/index.html.erb \
   && echo -e "<div class=\"nav\" style=\"text-align:center;\">\n  <%= link_to \"🆕 Neueste Links\", links_path %>\n  <%= link_to \"📋 Alle Links\", links_path(all: true) if account_signed_in? %>\n  <%= link_to \"🔍 Link Finden\", search_links_path %>\n  <%= link_to \"🏷️ Tags\", tags_path %>\n  <%= link_to \"❤️ Merkliste\", bookmarks_path if account_signed_in? %>\n  <%= link_to \"👥 Accounts\", accounts_path if account_signed_in? && current_account.admin? %>\n  <% if account_signed_in? %><%= link_to \"🔓 Logout\", destroy_account_session_path(current_account), method: :delete %><% else %><%= link_to \"🔐 Login\", new_account_session_path %><% end %>\n</div>" > app/views/application/_nav.html.erb \
   # Links index
