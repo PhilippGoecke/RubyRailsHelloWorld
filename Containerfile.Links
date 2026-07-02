@@ -136,6 +136,8 @@ RUN bundle exec rails generate controller welcome index \
       '.url-form input[type=submit], .btn { padding: 4px 10px; border: 1px solid #888; background: #f3f3f3; cursor: pointer; font-size: 13px; }' \
       '.nav { margin: 10px 0 14px; font-size: 13px; }' \
       '.nav a { color: #00c; margin-right: 14px; text-decoration: none; }' \
+      '.nav form { display: inline; margin: 0; padding: 0; }' \
+      '.nav button[type=submit] { color: #00c; margin-right: 14px; background: none; border: none; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; }' \
       'table.links { width: 100%; border-collapse: collapse; }' \
       'table.links tr:nth-child(odd) { background: #eee; }' \
       'table.links tr:nth-child(even) { background: #f7f7f7; }' \
