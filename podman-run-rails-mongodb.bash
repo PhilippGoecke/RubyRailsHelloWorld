@@ -29,6 +29,8 @@ podman run --detach \
   --network "$NETWORK" \
   --env ME_CONFIG_MONGODB_SERVER="$MONGO_NAME" \
   --env ME_CONFIG_MONGODB_PORT=27017 \
+  --env ME_CONFIG_BASICAUTH_USERNAME=admin \
+  --env ME_CONFIG_BASICAUTH_PASSWORD=admin \
   --publish 8081:8081 \
   docker.io/library/mongo-express:latest
 
