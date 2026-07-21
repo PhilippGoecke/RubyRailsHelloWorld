@@ -1,7 +1,13 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: rails-mongodb
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongo-data
+  namespace: rails-mongodb
 spec:
   accessModes:
     - ReadWriteOnce
@@ -13,6 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongo
+  namespace: rails-mongodb
   labels:
     app: mongo
 spec:
@@ -42,6 +49,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mongo
+  namespace: rails-mongodb
 spec:
   selector:
     app: mongo
@@ -53,6 +61,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rails-mongodb
+  namespace: rails-mongodb
   labels:
     app: rails-mongodb
 spec:
@@ -79,6 +88,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rails-mongodb
+  namespace: rails-mongodb
 spec:
   type: NodePort
   selector:
