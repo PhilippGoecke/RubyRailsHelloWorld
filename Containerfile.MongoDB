@@ -41,6 +41,7 @@ RUN bundle init \
   && bundle add mongoid \
   && bundle exec rails generate mongoid:config \
   && sed -i 's|- localhost:27017|- <%= ENV.fetch("MONGODB_HOST", "mongo:27017") %>|' config/mongoid.yml \
+  && printf '\nproduction:\n  clients:\n    default:\n      database: demo_production\n      hosts:\n        - <%%= ENV.fetch("MONGODB_HOST", "mongo:27017") %%>\n' >> config/mongoid.yml \
   && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
   && bundle exec rails generate controller welcome index \
   && bundle exec rails generate model visit name:string ip:string user_agent:string \
