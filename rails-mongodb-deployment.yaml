@@ -3,18 +3,6 @@ kind: Namespace
 metadata:
   name: rails-mongodb
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongo-data
-  namespace: rails-mongodb
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,8 +30,7 @@ spec:
               mountPath: /data/db
       volumes:
         - name: mongo-data
-          persistentVolumeClaim:
-            claimName: mongo-data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
