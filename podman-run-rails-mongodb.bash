@@ -3,6 +3,7 @@ set -euo pipefail
 
 NETWORK=rails-net
 MONGO_NAME=mongo
+MONGO_EXPRESS_NAME=mongo-express
 RAILS_NAME=rails-mongodb
 RAILS_IMAGE=localhost/rails-demo:latest
 
@@ -13,7 +14,7 @@ podman build --no-cache --rm --file Containerfile.MongoDB --tag "$RAILS_IMAGE" .
 podman network exists "$NETWORK" || podman network create "$NETWORK"
 
 # remove old containers if present
-podman rm -f "$MONGO_NAME" "$RAILS_NAME" 2>/dev/null || true
+podman rm -f "$MONGO_NAME" "$MONGO_EXPRESS_NAME" "$RAILS_NAME" 2>/dev/null || true
 
 # start MongoDB with persistent volume
 podman run -d \
@@ -21,6 +22,15 @@ podman run -d \
   --network "$NETWORK" \
   -v mongo-data:/data/db \
   docker.io/library/mongo:latest
+
+# start Mongo Express (web UI)
+podman run --detach \
+  --name "$MONGO_EXPRESS_NAME" \
+  --network "$NETWORK" \
+  --env ME_CONFIG_MONGODB_SERVER="$MONGO_NAME" \
+  --env ME_CONFIG_MONGODB_PORT=27017 \
+  --publish 8081:8081 \
+  docker.io/library/mongo-express:latest
 
 # start Rails app
 podman run --detach \
@@ -31,5 +41,6 @@ podman run --detach \
   "$RAILS_IMAGE"
 
 echo "Rails app running at http://localhost:3004"
+echo "Mongo Express running at http://localhost:8081"
 
-podman logs -f "$RAILS_IMAGE"
+podman logs -f "$RAILS_NAME"
