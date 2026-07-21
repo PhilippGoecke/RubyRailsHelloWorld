@@ -19,19 +19,6 @@ ARG HOME="/home/$USER"
 WORKDIR $HOME
 USER $USER
 
-# install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.18.0
-RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
-  && cd .nvm \
-  && . $HOME/.nvm/nvm.sh \
-  && nvm --version \
-  && nvm install $NODE_VERSION \
-  && npm --version \
-  && npm install --global yarn \
-  && which yarn \
-  && yarn --version
-ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
-
 # install Ruby using rbenv
 ENV RUBY_CONFIGURE_OPTS="--disable-install-rdoc"
 ENV PATH="$HOME/.rbenv/bin:$PATH"
@@ -50,7 +37,7 @@ WORKDIR /rails/demo
 RUN bundle init \
   && bundle add rails --version "~> 8.1.3" \
   && bundle update --bundler \
-  && bundle exec rails new . --force --skip-git --skip-active-record --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
+  && bundle exec rails new . --force --skip-git --skip-active-record --skip-javascript --css=bootstrap --asset-pipeline=propshaft \
   && bundle add mongoid \
   && bundle exec rails generate mongoid:config \
   && sed -i 's|hosts:.*|hosts:\n          - <%= ENV.fetch("MONGODB_HOST", "mongo:27017") %>|' config/mongoid.yml \
