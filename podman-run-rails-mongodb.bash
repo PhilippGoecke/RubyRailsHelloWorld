@@ -31,3 +31,5 @@ podman run --detach \
   "$RAILS_IMAGE"
 
 echo "Rails app running at http://localhost:3004"
+
+podman logs -f "$RAILS_IMAGE"
