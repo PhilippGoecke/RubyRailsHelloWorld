@@ -44,6 +44,7 @@ RUN bundle init \
   && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
   && bundle exec rails generate controller welcome index \
   && bundle exec rails generate model visit name:string ip:string user_agent:string \
+  && printf 'class Visit\n  include Mongoid::Document\n  include Mongoid::Timestamps\n\n  field :name, type: String\n  field :ip, type: String\n  field :user_agent, type: String\nend\n' > app/models/visit.rb \
   && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"\n    Visit.create(name: @name, ip: request.ip, user_agent: request.user_agent)\n    @visit_count = Visit.count' app/controllers/welcome_controller.rb \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
@@ -51,7 +52,6 @@ RUN bundle init \
   && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> <%= Mongoid::VERSION %> -->/g' app/views/layouts/application.html.erb \
   && sed -i '/def index/a \ \ \ \ @visits = Visit.order(created_at: :desc).limit(20)' app/controllers/welcome_controller.rb \
   && echo '<div class="container mt-3"><h2>Recent Visits</h2><table class="table table-striped"><thead><tr><th>Name</th><th>IP</th><th>User Agent</th><th>Created At</th></tr></thead><tbody><% @visits.each do |visit| %><tr><td><%= visit.name %></td><td><%= visit.ip %></td><td><%= visit.user_agent %></td><td><%= visit.created_at %></td></tr><% end %></tbody></table></div>' >> app/views/welcome/index.html.erb \
-  && sed -i '/class Visit/a \ \ include Mongoid::Timestamps' app/models/visit.rb \
   && bundle exec rails assets:precompile
 
 # new stage for Rails app
