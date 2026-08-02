@@ -86,6 +86,25 @@ RUN bundle add chartkick \
   && bundle exec rails javascript:build \
   && bundle exec rails assets:precompile
 
+# seed data: a power and a water meter with fake readings
+RUN echo 'power = Meter.find_or_create_by!(name: "Main Power", kind: "power", unit: "W")' > db/seeds.rb \
+  && echo 'water = Meter.find_or_create_by!(name: "Main Water", kind: "water", unit: "m3")' >> db/seeds.rb \
+  && echo 'if power.readings.none?' >> db/seeds.rb \
+  && echo '  value = 10_000.0' >> db/seeds.rb \
+  && echo '  60.downto(0) do |i|' >> db/seeds.rb \
+  && echo '    value += rand(5.0..25.0)' >> db/seeds.rb \
+  && echo '    power.readings.create!(recorded_at: i.days.ago.change(hour: 8), value: value.round(2))' >> db/seeds.rb \
+  && echo '  end' >> db/seeds.rb \
+  && echo 'end' >> db/seeds.rb \
+  && echo 'if water.readings.none?' >> db/seeds.rb \
+  && echo '  value = 500.0' >> db/seeds.rb \
+  && echo '  60.downto(0) do |i|' >> db/seeds.rb \
+  && echo '    value += rand(0.05..0.4)' >> db/seeds.rb \
+  && echo '    water.readings.create!(recorded_at: i.days.ago.change(hour: 8), value: value.round(3))' >> db/seeds.rb \
+  && echo '  end' >> db/seeds.rb \
+  && echo 'end' >> db/seeds.rb \
+  && bundle exec rails db:seed
+
 # new stage for Rails app
 FROM debian:trixie-slim as rails
 
