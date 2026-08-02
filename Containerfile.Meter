@@ -60,6 +60,26 @@ RUN bundle init \
   && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb \
   && bundle exec rails assets:precompile
 
+# Meter App: manage meters (e.g. water, power) and their readings, with usage plots
+RUN bundle add chartkick \
+  && bundle add groupdate \
+  && yarn add chartkick chart.js \
+  && bundle exec rails generate scaffold Meter name:string kind:string unit:string \
+  && bundle exec rails generate scaffold Reading meter:references value:decimal recorded_at:datetime \
+  && bundle exec rails db:migrate \
+  && sed -i '/belongs_to :meter/a \ \ validates :value, presence: true, numericality: true\n  validates :recorded_at, presence: true' app/models/reading.rb \
+  && sed -i '/class Meter < ApplicationRecord/a \ \ has_many :readings, dependent: :destroy\n  validates :name, presence: true\n  validates :kind, presence: true, inclusion: { in: %w[water power] }\n\n  # usage per day within a period (consumption = difference between consecutive readings)\n  def usage_between(from, to)\n    rs = readings.where(recorded_at: from..to).order(:recorded_at)\n    rs.each_cons(2).map { |a, b| [b.recorded_at.to_date, (b.value - a.value).to_f] }\n      .group_by(&:first).transform_values { |v| v.sum(&:last).round(3) }\n  end' app/models/meter.rb \
+  && sed -i 's|import "@hotwired/turbo-rails"|import "@hotwired/turbo-rails"\nimport "chartkick/chart.js"|' app/javascript/application.js \
+  && sed -i 's/# root/get "meters\/:id\/usage", to: "meters#usage", as: :meter_usage\n  # root/g' config/routes.rb \
+  && sed -i '/def show/i \ \ def usage\n    @meter = Meter.find(params[:id])\n    @from = params[:from].present? ? Time.zone.parse(params[:from]) : 30.days.ago\n    @to = params[:to].present? ? Time.zone.parse(params[:to]) : Time.zone.now\n    @usage = @meter.usage_between(@from, @to)\n  end\n' app/controllers/meters_controller.rb \
+  && echo '<h1 class="mb-4">Usage for <%= @meter.name %> (<%= @meter.kind == "power" ? "Watt" : "m³" %>)</h1>' > app/views/meters/usage.html.erb \
+  && echo '<%= form_with url: meter_usage_path(@meter), method: :get, class: "row g-3 mb-4" do |f| %><div class="col-auto"><%= f.label :from, class: "form-label" %><%= f.datetime_field :from, value: @from.strftime("%Y-%m-%dT%H:%M"), class: "form-control" %></div><div class="col-auto"><%= f.label :to, class: "form-label" %><%= f.datetime_field :to, value: @to.strftime("%Y-%m-%dT%H:%M"), class: "form-control" %></div><div class="col-auto align-self-end"><%= f.submit "Show", class: "btn btn-primary" %></div><% end %>' >> app/views/meters/usage.html.erb \
+  && echo '<%= column_chart @usage, suffix: (@meter.kind == "power" ? " W" : " m³"), colors: [@meter.kind == "power" ? "#f0ad4e" : "#0d6efd"], xtitle: "Date", ytitle: (@meter.kind == "power" ? "Power (Watt)" : "Water (m³)"), height: "400px" %>' >> app/views/meters/usage.html.erb \
+  && echo '<p class="mt-3"><%= link_to "Back to meter", @meter, class: "btn btn-secondary" %></p>' >> app/views/meters/usage.html.erb \
+  && sed -i 's|<%= link_to "Edit this meter", edit_meter_path(@meter) %>|<%= link_to "Usage plot", meter_usage_path(@meter), class: "btn btn-info" %>\n  <%= link_to "Edit this meter", edit_meter_path(@meter) %>|' app/views/meters/show.html.erb \
+  && bundle exec rails javascript:build \
+  && bundle exec rails assets:precompile
+
 # new stage for Rails app
 FROM debian:trixie-slim as rails
 
