@@ -44,7 +44,7 @@ RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && rbenv global 4.0.6
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
-WORKDIR /rails/meter
+WORKDIR /rails/meters
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
@@ -125,9 +125,9 @@ USER $USER
 # copy rbenv, Ruby and Rails App from install stage (chown so SQLite can open/create the database file)
 COPY --from=install --chown=$USER:$USER $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
-COPY --from=install --chown=$USER:$USER /rails/demo /rails/demo
+COPY --from=install --chown=$USER:$USER /rails/meters /rails/meters
 
-WORKDIR /rails/demo
+WORKDIR /rails/meters
 
 RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
 
