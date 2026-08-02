@@ -44,19 +44,13 @@ RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
   && rbenv global 4.0.6
 ENV PATH="$HOME/.rbenv/shims:$PATH"
 
-WORKDIR /rails/demo
+WORKDIR /rails/meter
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
   && bundle add rails --version "~> 8.1.3.1" \
   && bundle update --bundler \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
-  && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
-  && bundle exec rails generate controller welcome index \
-  && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
-  && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
-  && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
-  && echo '<div class="text-muted small mt-3"><p>IP: <%= request.ip %></p><p>User Agent: <%= request.user_agent %></p><p>Method: <%= request.method %> Path: <%= request.path %></p></div>' >> app/views/welcome/index.html.erb \
   && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb \
   && bundle exec rails assets:precompile
 
@@ -67,6 +61,7 @@ RUN bundle add chartkick \
   && bundle exec rails generate scaffold Meter name:string kind:string unit:string \
   && bundle exec rails generate scaffold Reading meter:references value:decimal recorded_at:datetime \
   && bundle exec rails db:migrate \
+  && sed -i 's/# root/root to: "meters#index"\n  # root/g' config/routes.rb \
   && sed -i '/belongs_to :meter/a \ \ validates :value, presence: true, numericality: true\n  validates :recorded_at, presence: true' app/models/reading.rb \
   && sed -i '/class Meter < ApplicationRecord/a \ \ has_many :readings, dependent: :destroy\n  validates :name, presence: true\n  validates :kind, presence: true, inclusion: { in: %w[water power] }\n\n  # usage per day within a period (consumption = difference between consecutive readings)\n  def usage_between(from, to)\n    rs = readings.where(recorded_at: from..to).order(:recorded_at)\n    rs.each_cons(2).map { |a, b| [b.recorded_at.to_date, (b.value - a.value).to_f] }\n      .group_by(&:first).transform_values { |v| v.sum(&:last).round(3) }\n  end' app/models/meter.rb \
   && sed -i 's|import "@hotwired/turbo-rails"|import "@hotwired/turbo-rails"\nimport "chartkick/chart.js"|' app/javascript/application.js \
