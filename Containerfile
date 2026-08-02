@@ -66,6 +66,7 @@ FROM debian:trixie-slim as rails
 # install dependencies
 RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && apt install -y --no-install-recommends --no-install-suggests curl \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
