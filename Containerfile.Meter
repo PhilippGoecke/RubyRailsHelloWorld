@@ -111,11 +111,7 @@ COPY --from=install --chown=$USER:$USER /rails/demo /rails/demo
 
 WORKDIR /rails/demo
 
-RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage db
-
-# prepare the production SQLite database
-ENV SECRET_KEY_BASE_DUMMY=1
-RUN RAILS_ENV=production bundle exec rails db:prepare
+RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
 
 # generate self-signed TLS certificate
 RUN mkdir -p config/ssl \
@@ -131,4 +127,4 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail --insecure https://localhost:3000/up || exit 1
 
-CMD ["bundle", "exec", "puma", "-b", "ssl://[::]:3000?key=config/ssl/server.key&cert=config/ssl/server.crt"]
+CMD ["sh", "-c", "bundle exec rails db:migrate 2>&1 || true && bundle exec rails server -b 'ssl://[::]:3000?key=config/ssl/server.key&cert=config/ssl/server.crt'"]
