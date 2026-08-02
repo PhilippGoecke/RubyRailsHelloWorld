@@ -104,14 +104,18 @@ ARG HOME="/home/$USER"
 WORKDIR $HOME
 USER $USER
 
-# copy rbenv, Ruby and Rails App from install stage
-COPY --from=install $HOME/.rbenv $HOME/.rbenv
+# copy rbenv, Ruby and Rails App from install stage (chown so SQLite can open/create the database file)
+COPY --from=install --chown=$USER:$USER $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
-COPY --from=install /rails/demo /rails/demo
+COPY --from=install --chown=$USER:$USER /rails/demo /rails/demo
 
 WORKDIR /rails/demo
 
-RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
+RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage db
+
+# prepare the production SQLite database
+ENV SECRET_KEY_BASE_DUMMY=1
+RUN RAILS_ENV=production bundle exec rails db:prepare
 
 # generate self-signed TLS certificate
 RUN mkdir -p config/ssl \
