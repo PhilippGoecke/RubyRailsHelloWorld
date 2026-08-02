@@ -77,6 +77,10 @@ RUN bundle add chartkick \
   && echo '<%= column_chart @usage, suffix: (@meter.kind == "power" ? " W" : " m³"), colors: [@meter.kind == "power" ? "#f0ad4e" : "#0d6efd"], xtitle: "Date", ytitle: (@meter.kind == "power" ? "Power (Watt)" : "Water (m³)"), height: "400px" %>' >> app/views/meters/usage.html.erb \
   && echo '<p class="mt-3"><%= link_to "Back to meter", @meter, class: "btn btn-secondary" %></p>' >> app/views/meters/usage.html.erb \
   && sed -i 's|<%= link_to "Edit this meter", edit_meter_path(@meter) %>|<%= link_to "Usage plot", meter_usage_path(@meter), class: "btn btn-info" %>\n  <%= link_to "Edit this meter", edit_meter_path(@meter) %>|' app/views/meters/show.html.erb \
+  # statistics: usage and mean usage of last week, month, year
+  && sed -i '/# usage per day within a period/i \ \ # total and mean daily usage for a period ending now\n  def usage_stats(period)\n    usage = usage_between(period.ago, Time.zone.now)\n    total = usage.values.sum.round(3)\n    days = usage.keys.size\n    mean = days.positive? ? (total \/ days).round(3) : 0\n    { total: total, mean: mean }\n  end\n' app/models/meter.rb \
+  && sed -i '/@usage = @meter.usage_between(@from, @to)/a \ \ \ \ @stats = { "Last week" => @meter.usage_stats(1.week), "Last month" => @meter.usage_stats(1.month), "Last year" => @meter.usage_stats(1.year) }' app/controllers/meters_controller.rb \
+  && echo '<h2 class="mt-4">Statistics</h2><table class="table table-striped w-auto"><thead><tr><th>Period</th><th>Total usage</th><th>Mean daily usage</th></tr></thead><tbody><% unit = @meter.kind == "power" ? "W" : "m³" %><% @stats.each do |label, s| %><tr><td><%= label %></td><td><%= s[:total] %> <%= unit %></td><td><%= s[:mean] %> <%= unit %></td></tr><% end %></tbody></table>' >> app/views/meters/usage.html.erb \
   # impoort/export readings as Excel file
   && bundle add caxlsx \
   && bundle add caxlsx_rails \
