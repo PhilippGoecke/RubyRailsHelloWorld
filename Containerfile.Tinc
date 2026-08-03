@@ -1,0 +1,150 @@
+FROM debian:trixie-slim as install
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+#SHELL ["/bin/bash", "-c"]
+RUN rm /bin/sh \
+  && ln -s /bin/bash /bin/sh
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests ca-certificates git curl libyaml-dev build-essential libssl-dev zlib1g-dev libvips \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# install Ruby, Node.js, Yarn
+ENV NODE_VERSION=24.18.1
+RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
+  && cd .nvm \
+  && . $HOME/.nvm/nvm.sh \
+  && nvm --version \
+  && nvm install $NODE_VERSION \
+  && npm --version \
+  && npm install --global yarn \
+  && which yarn \
+  && yarn --version
+ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
+
+# install Ruby using rbenv
+ENV RUBY_CONFIGURE_OPTS="--disable-install-rdoc"
+ENV PATH="$HOME/.rbenv/bin:$PATH"
+RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
+  && ~/.rbenv/bin/rbenv init \
+  && rbenv --version \
+  && mkdir "$(rbenv root)"/plugins/ \
+  && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
+  && rbenv install 4.0.6 \
+  && rbenv global 4.0.6
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+
+WORKDIR /rails/tinc-vpns
+
+# install Rails and initialize a new Rails app
+RUN bundle init \
+  && bundle add rails --version "~> 8.1.3.1" \
+  && bundle update --bundler \
+  && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --asset-pipeline=propshaft \
+  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb
+
+# scaffold models to manage tinc VPN networks and their nodes (ip, dns, public key)
+RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string description:text \
+  && bundle exec rails generate scaffold Node network:references name:string ip:string dns:string public_key:text \
+  && sed -i 's/belongs_to :network/belongs_to :network/;s/class Network < ApplicationRecord/class Network < ApplicationRecord\n  has_many :nodes, dependent: :destroy\n  validates :name, presence: true, uniqueness: true/' app/models/network.rb \
+  && sed -i 's/class Node < ApplicationRecord/class Node < ApplicationRecord\n  validates :name, presence: true, uniqueness: { scope: :network_id }\n  validates :ip, presence: true\n  validates :public_key, presence: true/' app/models/node.rb \
+  && sed -i 's|# root "posts#index"|root "networks#index"|' config/routes.rb \
+  && bundle exec rails db:prepare
+
+# Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
+# (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
+# migration filenames deterministic across builds so image layers stay cacheable and
+# schema.rb diffs are stable. Updates filenames, the `schema_migrations` rows in the
+# database and the version references in db/schema.rb (if present).
+RUN printf '%s\n' \
+  '#!/usr/bin/env ruby' \
+  '# Re-sequence Rails migration timestamps to deterministic, sequential IDs.' \
+  'require "fileutils"' \
+  'migrate_dir = File.expand_path("../db/migrate", __dir__)' \
+  'abort("[resequence] no db/migrate directory") unless Dir.exist?(migrate_dir)' \
+  'files = Dir.children(migrate_dir).grep(/\A\d+_.+\.rb\z/).sort_by { |f| f[/\A(\d+)_/, 1].to_i }' \
+  'mapping = {}' \
+  'files.each_with_index do |name, idx|' \
+  '  old_ts = name[/\A(\d+)_/, 1]' \
+  '  new_ts = format("%014d", idx + 1)' \
+  '  next if old_ts == new_ts' \
+  '  new_name = name.sub(/\A\d+_/, "#{new_ts}_")' \
+  '  target = File.join(migrate_dir, new_name)' \
+  '  abort("[resequence] collision: #{new_name}") if File.exist?(target)' \
+  '  FileUtils.mv(File.join(migrate_dir, name), target)' \
+  '  mapping[old_ts] = new_ts' \
+  '  puts "[resequence] #{name} -> #{new_name}"' \
+  'end' \
+  'exit 0 if mapping.empty?' \
+  'schema = File.expand_path("../db/schema.rb", __dir__)' \
+  'if File.exist?(schema)' \
+  '  content = File.read(schema)' \
+  '  mapping.each do |old_ts, new_ts|' \
+  '    content.gsub!(old_ts, new_ts)' \
+  '    # Rails writes the schema version in underscored form, e.g. 2024_01_01_000000' \
+  '    old_us = old_ts.gsub(/\A(\d{4})(\d{2})(\d{2})(\d{6})\z/, "\\1_\\2_\\3_\\4")' \
+  '    new_i = new_ts.to_i.to_s' \
+  '    content.gsub!(old_us, new_i) if old_us != old_ts' \
+  '  end' \
+  '  File.write(schema, content)' \
+  '  puts "[resequence] updated db/schema.rb"' \
+  'end' \
+  'begin' \
+  '  require_relative "../config/environment"' \
+  '  mapping.each do |old_ts, new_ts|' \
+  '    ActiveRecord::Base.connection.execute("UPDATE schema_migrations SET version = #{ActiveRecord::Base.connection.quote(new_ts)} WHERE version = #{ActiveRecord::Base.connection.quote(old_ts)}")' \
+  '  end' \
+  '  puts "[resequence] updated schema_migrations table"' \
+  'rescue StandardError => e' \
+  '  warn "[resequence] skipped schema_migrations update: #{e.message}"' \
+  'end' > bin/resequence_migrations \
+  && chmod +x bin/resequence_migrations \
+  && ruby bin/resequence_migrations
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev openssl libvips \
+  && apt install -y --no-install-recommends --no-install-suggests curl \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage (chown so SQLite can open/create the database file)
+COPY --from=install --chown=$USER:$USER $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install --chown=$USER:$USER /rails/tinc-vpns /rails/tinc-vpns
+
+WORKDIR /rails/tinc-vpns
+
+RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
+
+# generate self-signed TLS certificate
+RUN mkdir -p config/ssl \
+  && openssl req -x509 -newkey rsa:4096 -nodes -keyout config/ssl/server.key -out config/ssl/server.crt -days 365 -subj "/CN=localhost"
+
+ENV RAILS_ENV=production
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail --insecure https://localhost:3000/up || exit 1
+
+CMD ["sh", "-c", "bundle exec rails db:migrate 2>&1 || true && bundle exec rails server -b 'ssl://[::]:3000?key=config/ssl/server.key&cert=config/ssl/server.crt'"]
