@@ -97,7 +97,6 @@ RUN bundle init \
 # Meter App: manage meters (e.g. water, power) and their readings, with usage plots
 RUN bundle add chartkick \
   && bundle add groupdate \
-  && yarn remove bootstrap @popperjs/core bootstrap-icons 2>/dev/null || true \
   && yarn add chartkick chart.js \
   && bundle exec rails generate scaffold Meter name:string kind:string unit:string \
   && bundle exec rails generate scaffold Reading meter:references value:decimal recorded_at:datetime \
