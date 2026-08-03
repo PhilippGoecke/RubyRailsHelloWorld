@@ -88,7 +88,7 @@ RUN bundle add devise \
   '  end' \
   'end' \
   > app/models/ability.rb \
-  && sed -i 's/class ApplicationController < ActionController::Base/class ApplicationController < ActionController::Base\n  before_action :authenticate_account!\n\n  rescue_from CanCan::AccessDenied do |exception|\n    redirect_to root_path, alert: exception.message\n  end/' app/controllers/application_controller.rb \
+  && sed -i 's/class ApplicationController < ActionController::Base/class ApplicationController < ActionController::Base\n  before_action :authenticate_account!\n\n  def current_ability\n    @current_ability ||= Ability.new(current_account)\n  end\n\n  rescue_from CanCan::AccessDenied do |exception|\n    redirect_to root_path, alert: exception.message\n  end/' app/controllers/application_controller.rb \
   && sed -i 's/class NetworksController < ApplicationController/class NetworksController < ApplicationController\n  load_and_authorize_resource/' app/controllers/networks_controller.rb \
   && sed -i 's/class NodesController < ApplicationController/class NodesController < ApplicationController\n  load_and_authorize_resource/' app/controllers/nodes_controller.rb \
   && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
