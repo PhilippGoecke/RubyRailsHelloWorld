@@ -128,6 +128,56 @@ RUN bundle add chartkick \
   && bundle exec rails javascript:build \
   && bundle exec rails assets:precompile
 
+# Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
+# (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
+# migration filenames deterministic across builds so image layers stay cacheable and
+# schema.rb diffs are stable. Updates filenames, the `schema_migrations` rows in the
+# database and the version references in db/schema.rb (if present).
+RUN printf '%s\n' \
+  '#!/usr/bin/env ruby' \
+  '# Re-sequence Rails migration timestamps to deterministic, sequential IDs.' \
+  'require "fileutils"' \
+  'migrate_dir = File.expand_path("../db/migrate", __dir__)' \
+  'abort("[resequence] no db/migrate directory") unless Dir.exist?(migrate_dir)' \
+  'files = Dir.children(migrate_dir).grep(/\A\d+_.+\.rb\z/).sort_by { |f| f[/\A(\d+)_/, 1].to_i }' \
+  'mapping = {}' \
+  'files.each_with_index do |name, idx|' \
+  '  old_ts = name[/\A(\d+)_/, 1]' \
+  '  new_ts = format("%014d", idx + 1)' \
+  '  next if old_ts == new_ts' \
+  '  new_name = name.sub(/\A\d+_/, "#{new_ts}_")' \
+  '  target = File.join(migrate_dir, new_name)' \
+  '  abort("[resequence] collision: #{new_name}") if File.exist?(target)' \
+  '  FileUtils.mv(File.join(migrate_dir, name), target)' \
+  '  mapping[old_ts] = new_ts' \
+  '  puts "[resequence] #{name} -> #{new_name}"' \
+  'end' \
+  'exit 0 if mapping.empty?' \
+  'schema = File.expand_path("../db/schema.rb", __dir__)' \
+  'if File.exist?(schema)' \
+  '  content = File.read(schema)' \
+  '  mapping.each do |old_ts, new_ts|' \
+  '    content.gsub!(old_ts, new_ts)' \
+  '    # Rails writes the schema version in underscored form, e.g. 2024_01_01_000000' \
+  '    old_us = old_ts.gsub(/\A(\d{4})(\d{2})(\d{2})(\d{6})\z/, "\\1_\\2_\\3_\\4")' \
+  '    new_i = new_ts.to_i.to_s' \
+  '    content.gsub!(old_us, new_i) if old_us != old_ts' \
+  '  end' \
+  '  File.write(schema, content)' \
+  '  puts "[resequence] updated db/schema.rb"' \
+  'end' \
+  'begin' \
+  '  require_relative "../config/environment"' \
+  '  mapping.each do |old_ts, new_ts|' \
+  '    ActiveRecord::Base.connection.execute("UPDATE schema_migrations SET version = #{ActiveRecord::Base.connection.quote(new_ts)} WHERE version = #{ActiveRecord::Base.connection.quote(old_ts)}")' \
+  '  end' \
+  '  puts "[resequence] updated schema_migrations table"' \
+  'rescue StandardError => e' \
+  '  warn "[resequence] skipped schema_migrations update: #{e.message}"' \
+  'end' > bin/resequence_migrations \
+  && chmod +x bin/resequence_migrations \
+  && ruby bin/resequence_migrations
+
 # seed data: a power and a water meter with fake readings
 RUN echo 'power = Meter.find_or_create_by!(name: "Main Power", kind: "power", unit: "W")' > db/seeds.rb \
   && echo 'water = Meter.find_or_create_by!(name: "Main Water", kind: "water", unit: "m3")' >> db/seeds.rb \
