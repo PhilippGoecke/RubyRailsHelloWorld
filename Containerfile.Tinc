@@ -157,7 +157,7 @@ RUN printf '%s\n' \
   '#notice::before { content: "✅ "; }' \
   'footer { text-align: center; color: var(--muted); padding: 2rem 0 1.5rem; font-size: 0.85rem; }' \
   > app/assets/stylesheets/theme.css \
-  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <a class="brand" href="/">🔐 Tinc VPNs</a>\n      <% if account_signed_in? %>\n        <a href="/networks">🌐 Networks</a>\n        <a href="/nodes">🖥️ Nodes</a>\n        <%= button_to "🚪 Sign out", session_path, method: :delete %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
+  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <a class="brand" href="/">🔐 Tinc VPNs</a>\n      <% if account_signed_in? %>\n        <a href="/networks">🌐 Networks</a>\n        <a href="/nodes">🖥️ Nodes</a>\n        <%= button_to "🚪 Sign out", destroy_account_session_path, method: :delete %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
   && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
