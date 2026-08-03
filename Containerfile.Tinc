@@ -61,6 +61,36 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   && sed -i 's|# root "posts#index"|root "networks#index"|' config/routes.rb \
   && bundle exec rails db:prepare
 
+# ✨ Beautify the UI: emoji icons, a navbar, cards and a modern dark-glass theme
+RUN printf '%s\n' \
+  ':root { --bg: #0f172a; --panel: rgba(30, 41, 59, 0.75); --accent: #38bdf8; --accent2: #a78bfa; --text: #e2e8f0; --muted: #94a3b8; }' \
+  '* { box-sizing: border-box; }' \
+  'body { margin: 0; min-height: 100vh; font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 60%), radial-gradient(1000px 500px at 90% 110%, #3b2a5f 0%, transparent 60%), var(--bg); }' \
+  'nav.topbar { display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1.5rem; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(148, 163, 184, 0.2); position: sticky; top: 0; }' \
+  'nav.topbar .brand { font-size: 1.25rem; font-weight: 700; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; text-decoration: none; }' \
+  'nav.topbar a { color: var(--muted); text-decoration: none; transition: color 0.2s; }' \
+  'nav.topbar a:hover { color: var(--accent); }' \
+  'main { max-width: 960px; margin: 2rem auto; padding: 0 1.25rem; }' \
+  'h1 { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; letter-spacing: 0.01em; }' \
+  'h1::before { content: "🌐"; }' \
+  'div[id^="network_"], div[id^="node_"] { background: var(--panel); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 14px; padding: 1.1rem 1.4rem; margin: 1rem 0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); transition: transform 0.15s ease, border-color 0.15s ease; }' \
+  'div[id^="network_"]:hover, div[id^="node_"]:hover { transform: translateY(-2px); border-color: var(--accent); }' \
+  'a { color: var(--accent); }' \
+  'a[href$="/new"]::before { content: "➕ "; }' \
+  'a[href$="/edit"]::before { content: "✏️ "; }' \
+  'input[type="submit"], button { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #0f172a; font-weight: 600; border: none; border-radius: 10px; padding: 0.55rem 1.2rem; cursor: pointer; transition: filter 0.2s, transform 0.1s; }' \
+  'input[type="submit"]:hover, button:hover { filter: brightness(1.15); transform: translateY(-1px); }' \
+  'input[type="text"], textarea { width: 100%; max-width: 480px; background: rgba(15, 23, 42, 0.7); color: var(--text); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 10px; padding: 0.6rem 0.8rem; margin: 0.25rem 0 0.75rem; }' \
+  'input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25); }' \
+  'label { color: var(--muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.06em; }' \
+  'p[style*="color: green"], #notice { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #4ade80; border-radius: 10px; padding: 0.7rem 1rem; }' \
+  '#notice::before { content: "✅ "; }' \
+  'footer { text-align: center; color: var(--muted); padding: 2rem 0 1.5rem; font-size: 0.85rem; }' \
+  > app/assets/stylesheets/theme.css \
+  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <a class="brand" href="/">🔐 Tinc VPNs</a>\n      <a href="/networks">🌐 Networks</a>\n      <a href="/nodes">🖥️ Nodes</a>\n    </nav>|' app/views/layouts/application.html.erb \
+  && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
+  && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
+
 # Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
 # (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
 # migration filenames deterministic across builds so image layers stay cacheable and
