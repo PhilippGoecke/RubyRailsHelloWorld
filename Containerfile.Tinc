@@ -61,6 +61,39 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   && sed -i 's|# root "posts#index"|root "networks#index"|' config/routes.rb \
   && bundle exec rails db:prepare
 
+# 📦 Add a .tar.gz download for a network including all its nodes' host files
+RUN sed -i 's|resources :networks|resources :networks do\n    member do\n      get :download\n    end\n  end|' config/routes.rb \
+  && printf '%s\n' \
+  'require "rubygems/package"' \
+  'require "zlib"' \
+  '' \
+  'module NetworksHelper' \
+  'end' \
+  > app/helpers/networks_helper.rb \
+  && printf '%s\n' \
+  '  def download' \
+  '    network = Network.find(params[:id])' \
+  '    require "rubygems/package"' \
+  '    require "zlib"' \
+  '    require "stringio"' \
+  '    io = StringIO.new' \
+  '    Zlib::GzipWriter.wrap(io) do |gz|' \
+  '      Gem::Package::TarWriter.new(gz) do |tar|' \
+  '        conf = "Name = #{network.name}\n# Subnet: #{network.subnet}\n"' \
+  '        tar.add_file_simple("#{network.name}/tinc.conf", 0o644, conf.bytesize) { |f| f.write(conf) }' \
+  '        network.nodes.each do |node|' \
+  '          host = "Address = #{node.dns.presence || node.ip}\nSubnet = #{node.ip}/32\n\n#{node.public_key}\n"' \
+  '          tar.add_file_simple("#{network.name}/hosts/#{node.name}", 0o644, host.bytesize) { |f| f.write(host) }' \
+  '        end' \
+  '      end' \
+  '    end' \
+  '    send_data io.string, filename: "#{network.name}.tar.gz", type: "application/gzip"' \
+  '  end' \
+  > /tmp/download_action.rb \
+  && sed -i '/def index/e cat /tmp/download_action.rb' app/controllers/networks_controller.rb \
+  && rm /tmp/download_action.rb \
+  && sed -i 's|<%= link_to "Edit this network"|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb || true
+
 # ✨ Beautify the UI: emoji icons, a navbar, cards and a modern dark-glass theme
 RUN printf '%s\n' \
   ':root { --bg: #0f172a; --panel: rgba(30, 41, 59, 0.75); --accent: #38bdf8; --accent2: #a78bfa; --text: #e2e8f0; --muted: #94a3b8; }' \
