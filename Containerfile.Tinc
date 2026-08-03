@@ -61,7 +61,44 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   && sed -i 's|# root "posts#index"|root "networks#index"|' config/routes.rb \
   && bundle exec rails db:prepare
 
-# 📦 Add a .tar.gz download for a network including all its nodes' host files
+# � Add Devise + CanCanCan: accounts, network memberships and an admin role
+RUN bundle add devise --version "~> 4.9" \
+  && bundle add cancancan --version "~> 3.6" \
+  && bundle exec rails generate devise:install \
+  && bundle exec rails generate devise Account \
+  && sed -i 's/class Account < ApplicationRecord/class Account < ApplicationRecord\n  has_many :memberships, dependent: :destroy\n  has_many :networks, through: :memberships\n  def admin?\n    admin\n  end/' app/models/account.rb \
+  && bundle exec rails generate migration AddAdminToAccounts admin:boolean \
+  && sed -i 's/add_column :accounts, :admin, :boolean/add_column :accounts, :admin, :boolean, default: false, null: false/' db/migrate/*_add_admin_to_accounts.rb \
+  && bundle exec rails generate scaffold Membership account:references network:references \
+  && sed -i 's/class Membership < ApplicationRecord/class Membership < ApplicationRecord\n  validates :account_id, uniqueness: { scope: :network_id }/' app/models/membership.rb \
+  && sed -i 's/has_many :nodes, dependent: :destroy/has_many :nodes, dependent: :destroy\n  has_many :memberships, dependent: :destroy\n  has_many :accounts, through: :memberships/' app/models/network.rb \
+  && printf '%s\n' \
+  'class Ability' \
+  '  include CanCan::Ability' \
+  '' \
+  '  def initialize(account)' \
+  '    return if account.blank?' \
+  '    if account.admin?' \
+  '      can :manage, :all' \
+  '    else' \
+  '      can :read, Network, memberships: { account_id: account.id }' \
+  '      can :download, Network, memberships: { account_id: account.id }' \
+  '      can :read, Node, network: { memberships: { account_id: account.id } }' \
+  '    end' \
+  '  end' \
+  'end' \
+  > app/models/ability.rb \
+  && sed -i 's/class ApplicationController < ActionController::Base/class ApplicationController < ActionController::Base\n  before_action :authenticate_account!\n\n  rescue_from CanCan::AccessDenied do |exception|\n    redirect_to root_path, alert: exception.message\n  end/' app/controllers/application_controller.rb \
+  && sed -i 's/class NetworksController < ApplicationController/class NetworksController < ApplicationController\n  load_and_authorize_resource/' app/controllers/networks_controller.rb \
+  && sed -i 's/class NodesController < ApplicationController/class NodesController < ApplicationController\n  load_and_authorize_resource/' app/controllers/nodes_controller.rb \
+  && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
+  && sed -i 's|devise_for :accounts|devise_for :accounts|' config/routes.rb \
+  && sed -i 's/# config.mailer_sender/config.mailer_sender/' config/initializers/devise.rb \
+  && echo 'Rails.application.config.action_mailer.default_url_options = { host: "localhost", port: 3000 }' > config/initializers/mailer_defaults.rb \
+  && bundle exec rails db:migrate \
+  && bundle exec rails runner 'Account.create!(email: "admin@example.com", password: "changeme!", admin: true) unless Account.exists?(email: "admin@example.com")'
+
+# �📦 Add a .tar.gz download for a network including all its nodes' host files
 RUN sed -i 's|resources :networks|resources :networks do\n    member do\n      get :download\n    end\n  end|' config/routes.rb \
   && printf '%s\n' \
   'require "rubygems/package"' \
