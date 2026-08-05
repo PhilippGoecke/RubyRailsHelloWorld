@@ -108,7 +108,7 @@ RUN bundle add devise \
   && bundle exec rails runner 'Account.create!(email: "admin@example.com", password: "changeme!", admin: true) unless Account.exists?(email: "admin@example.com")'
 
 # �📦 Add a .tar.gz download for a network including all its nodes' host files
-RUN sed -i 's|resources :networks|resources :networks do\n    member do\n      get :download\n    end\n  end|' config/routes.rb \
+RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n      get :download\n    end\n  end|' config/routes.rb \
   && printf '%s\n' \
   'require "rubygems/package"' \
   'require "zlib"' \
