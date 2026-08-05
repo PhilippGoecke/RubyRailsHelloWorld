@@ -59,8 +59,13 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   && sed -i 's/belongs_to :network/belongs_to :network/;s/class Network < ApplicationRecord/class Network < ApplicationRecord\n  has_many :nodes, dependent: :destroy\n  validates :name, presence: true, uniqueness: true/' app/models/network.rb \
   && sed -i 's/class Node < ApplicationRecord/class Node < ApplicationRecord\n  validates :name, presence: true, uniqueness: { scope: :network_id }\n  validates :ip, presence: true\n  validates :public_key, presence: true/' app/models/node.rb \
   && sed -i 's|# root "posts#index"|root "networks#index"|' config/routes.rb \
-  && sed -i 's|<%= form.text_field :network_id %>|<%= form.hidden_field :network_id %>|' app/views/nodes/_form.html.erb \
-  && sed -i 's|<%= link_to "Edit this network"|<%= link_to "🖥️ New node", new_node_path(network_id: @network.id) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb \
+  && sed -i 's|resources :networks|resources :networks do\n    resources :nodes, only: [:new, :create]\n  end|' config/routes.rb \
+  && sed -i '0,/<%= form.text_field :network_id %>/s||<%= form.hidden_field :network_id %>|' app/views/nodes/_form.html.erb \
+  && sed -i 's|form_with(model: node)|form_with(model: node, url: node.new_record? ? network_nodes_path(node.network) : node_path(node))|' app/views/nodes/_form.html.erb \
+  && sed -i 's|def new\n    @node = Node.new\n  end|def new\n    @network = Network.find(params[:network_id])\n    @node = @network.nodes.build\n  end|' app/controllers/nodes_controller.rb \
+  && perl -0pi -e 's/def new\n    \@node = Node\.new\n  end/def new\n    \@network = Network.find(params[:network_id])\n    \@node = \@network.nodes.build\n  end/' app/controllers/nodes_controller.rb \
+  && perl -0pi -e 's/def create\n    \@node = Node\.new\(node_params\)/def create\n    \@network = Network.find(params[:network_id])\n    \@node = \@network.nodes.build(node_params)/' app/controllers/nodes_controller.rb \
+  && sed -i 's|<%= link_to "Edit this network"|<%= link_to "🖥️ New node", new_network_node_path(@network) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb \
   && bundle exec rails db:prepare
 
 # � Add Devise + CanCanCan: accounts, network memberships and an admin role
