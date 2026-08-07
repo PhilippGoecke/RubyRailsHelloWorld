@@ -101,14 +101,13 @@ RUN bundle add devise \
   && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
   && sed -i 's|<%= form.text_field :account_id %>|<%= form.collection_select :account_id, Account.all, :id, :email %>|' app/views/memberships/_form.html.erb \
   && sed -i 's|<%= form.text_field :network_id %>|<%= form.collection_select :network_id, Network.all, :id, :name %>|' app/views/memberships/_form.html.erb \
-  && sed -i 's|devise_for :accounts|devise_for :accounts|' config/routes.rb \
   && sed -i 's/# config.mailer_sender/config.mailer_sender/' config/initializers/devise.rb \
   && echo 'Rails.application.config.action_mailer.default_url_options = { host: "localhost", port: 3000 }' > config/initializers/mailer_defaults.rb \
   && bundle exec rails db:migrate \
   && bundle exec rails runner 'Account.create!(email: "admin@example.com", password: "changeme!", admin: true) unless Account.exists?(email: "admin@example.com")'
 
 # �📦 Add a .tar.gz download for a network including all its nodes' host files
-RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n      get :download\n    end\n  end|' config/routes.rb \
+RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n      get :download\n    end|' config/routes.rb \
   && printf '%s\n' \
   'require "rubygems/package"' \
   'require "zlib"' \
