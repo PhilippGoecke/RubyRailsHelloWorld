@@ -97,8 +97,8 @@ RUN bundle add devise \
   > app/models/ability.rb \
   && sed -i 's/class ApplicationController < ActionController::Base/class ApplicationController < ActionController::Base\n  before_action :authenticate_account!\n\n  def current_ability\n    @current_ability ||= Ability.new(current_account)\n  end\n\n  rescue_from CanCan::AccessDenied do |exception|\n    redirect_to root_path, alert: exception.message\n  end/' app/controllers/application_controller.rb \
   && sed -i 's/class NetworksController < ApplicationController/class NetworksController < ApplicationController\n  load_and_authorize_resource/' app/controllers/networks_controller.rb \
-  # restrict network creation to admins (CanCanCan ability) and hide links from unauthorized users
-  && sed -i "s/can :manage, Network/can [:read, :update, :destroy], Network\n      can :create, Network if user.admin?/" app/models/ability.rb \
+  # restrict network creation to admins (CanCanCan ability) and hide links from unauthorized accounts
+  && sed -i "s/can :manage, Network/can [:read, :update, :destroy], Network\n      can :create, Network if account.admin?/" app/models/ability.rb \
   && sed -i 's|<%= link_to "New network", new_network_path %>|<%= link_to "New network", new_network_path if can? :create, Network %>|' app/views/networks/index.html.erb \
   # Nodes
   && sed -i 's/class NodesController < ApplicationController/class NodesController < ApplicationController\n  load_and_authorize_resource/' app/controllers/nodes_controller.rb \
