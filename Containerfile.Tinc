@@ -161,6 +161,16 @@ RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n    
   && rm /tmp/download_action.rb \
   && sed -i 's|<%= link_to "Edit this network"|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb || true
 
+# 🔒 Add a Tinc VPN favicon (emoji-based SVG)
+RUN printf '%s\n' \
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' \
+  '  <text y=".9em" font-size="90">🔒</text>' \
+  '</svg>' \
+  > public/icon.svg \
+  && sed -i 's|<%= favicon_link_tag %>|<%= favicon_link_tag "icon.svg", type: "image/svg+xml" %>|' app/views/layouts/application.html.erb \
+  && grep -q 'favicon_link_tag' app/views/layouts/application.html.erb \
+  || sed -i 's|</head>|  <link rel="icon" href="/icon.svg" type="image/svg+xml">\n  </head>|' app/views/layouts/application.html.erb
+
 # 🔗 Per-account ConnectTo selection: each user picks ConnectTo nodes per network,
 # saved in the DB and rendered as ConnectTo lines in the downloaded tinc.conf
 RUN bundle exec rails generate model ConnectToSelection account:references node:references \
