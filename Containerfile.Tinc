@@ -108,6 +108,20 @@ RUN bundle add devise \
   && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
   && sed -i 's|<%= form.text_field :account_id %>|<%= form.collection_select :account_id, Account.all, :id, :email %>|' app/views/memberships/_form.html.erb \
   && sed -i 's|<%= form.text_field :network_id %>|<%= form.collection_select :network_id, Network.all, :id, :name %>|' app/views/memberships/_form.html.erb \
+  # show all members of a network on the network show page
+  && printf '%s\n' \
+  '<h2>👥 Members</h2>' \
+  '<% if @network.accounts.any? %>' \
+  '  <ul>' \
+  '    <% @network.accounts.each do |account| %>' \
+  '      <li><%= account.email %></li>' \
+  '    <% end %>' \
+  '  </ul>' \
+  '<% else %>' \
+  '  <p>No members yet.</p>' \
+  '<% end %>' \
+  > app/views/networks/_members.html.erb \
+  && sed -i 's|<%= link_to "🖥️ New node", new_network_node_path(@network) %>|<%= render "members" %>\n\n  <%= link_to "🖥️ New node", new_network_node_path(@network) %>|' app/views/networks/show.html.erb \
   && sed -i 's/# config.mailer_sender/config.mailer_sender/' config/initializers/devise.rb \
   && echo 'Rails.application.config.action_mailer.default_url_options = { host: "localhost", port: 3000 }' > config/initializers/mailer_defaults.rb \
   && bundle exec rails db:migrate \
