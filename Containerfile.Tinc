@@ -226,8 +226,11 @@ RUN printf '%s\n' \
   'p[style*="color: green"], #notice { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #4ade80; border-radius: 10px; padding: 0.7rem 1rem; }' \
   '#notice::before { content: "✅ "; }' \
   'footer { text-align: center; color: var(--muted); padding: 2rem 0 1.5rem; font-size: 0.85rem; }' \
+  'nav.topbar form { display: inline; margin: 0; }' \
+  'nav.topbar button.linklike { background: none; border: none; padding: 0; font: inherit; font-weight: normal; color: var(--muted); cursor: pointer; transition: color 0.2s; }' \
+  'nav.topbar button.linklike:hover { color: var(--accent); filter: none; transform: none; }' \
   > app/assets/stylesheets/theme.css \
-  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <a class="brand" href="/">🔐 Tinc VPNs</a>\n      <% if account_signed_in? %>\n        <a href="/networks">🌐 Networks</a>\n        <a href="/nodes">🖥️ Nodes</a>\n        <% if current_account.admin? %>\n          <%= link_to "👥 Memberships", memberships_path %>\n        <% end %>\n        <%= link_to "🚪 Sign out", destroy_account_session_path, data: { turbo_method: :delete } %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
+  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <a class="brand" href="/">🔐 Tinc VPNs</a>\n      <% if account_signed_in? %>\n        <a href="/networks">🌐 Networks</a>\n        <a href="/nodes">🖥️ Nodes</a>\n        <% if current_account.admin? %>\n          <%= link_to "👥 Memberships", memberships_path %>\n        <% end %>\n        <%= button_to "🚪 Sign out", destroy_account_session_path, method: :delete, class: "linklike" %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
   && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
