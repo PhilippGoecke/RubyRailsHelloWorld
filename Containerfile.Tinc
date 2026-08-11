@@ -100,6 +100,9 @@ RUN bundle add devise \
   # restrict network creation to admins (CanCanCan ability) and hide links from unauthorized accounts
   && sed -i "s/can :manage, Network/can [:read, :update, :destroy], Network\n      can :create, Network if account.admin?/" app/models/ability.rb \
   && sed -i 's|<%= link_to "New network", new_network_path %>|<%= link_to "New network", new_network_path if can? :create, Network %>|' app/views/networks/index.html.erb \
+  # only list networks the account can see (accessible_by via load_and_authorize_resource)
+  && sed -i 's/def index\n    @networks = Network.all\n  end/def index\n  end/' app/controllers/networks_controller.rb \
+  && perl -0pi -e 's/def index\n    \@networks = Network\.all\n  end/def index\n    \@networks = Network.accessible_by(current_ability)\n  end/' app/controllers/networks_controller.rb \
   # Nodes
   && sed -i 's/class NodesController < ApplicationController/class NodesController < ApplicationController\n  load_and_authorize_resource/' app/controllers/nodes_controller.rb \
   && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
