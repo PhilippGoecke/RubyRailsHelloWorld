@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.18.1
+ENV NODE_VERSION=24.19.0
 RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -52,7 +52,7 @@ RUN ruby --version; \
 
 WORKDIR /rails/demo
 
-# install Rails and scaffold a Turbo showcase app
+# install Rails and initialize a new Rails app
 RUN bundle init \
   && bundle add rails \
   && bundle update --bundler \
