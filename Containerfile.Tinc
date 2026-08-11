@@ -257,6 +257,10 @@ RUN mkdir -p config/ssl \
   && openssl req -x509 -newkey rsa:4096 -nodes -keyout config/ssl/server.key -out config/ssl/server.crt -days 365 -subj "/CN=localhost"
 
 ENV RAILS_ENV=production
+ENV RAILS_SERVE_STATIC_FILES=true
+
+# precompile assets so /assets/application.css and /assets/application.js exist
+RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
 
 EXPOSE 3000
 
