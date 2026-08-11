@@ -233,7 +233,8 @@ RUN printf '%s\n' \
 
 ENV RAILS_SERVE_STATIC_FILES=true
 # precompile assets so /assets/application.css and /assets/application.js exist
-RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
+RUN npm install --global esbuild \
+  && SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
 
 # Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
 # (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
