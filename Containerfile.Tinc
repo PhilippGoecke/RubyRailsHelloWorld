@@ -146,6 +146,47 @@ RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n    
   && rm /tmp/download_action.rb \
   && sed -i 's|<%= link_to "Edit this network"|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb || true
 
+# 🔗 Per-account ConnectTo selection: each user picks ConnectTo nodes per network,
+# saved in the DB and rendered as ConnectTo lines in the downloaded tinc.conf
+RUN bundle exec rails generate model ConnectToSelection account:references node:references \
+  && sed -i 's/class ConnectToSelection < ApplicationRecord/class ConnectToSelection < ApplicationRecord\n  validates :node_id, uniqueness: { scope: :account_id }/' app/models/connect_to_selection.rb \
+  && sed -i 's/has_many :memberships, dependent: :destroy\n  has_many :networks, through: :memberships/has_many :memberships, dependent: :destroy\n  has_many :networks, through: :memberships/' app/models/account.rb \
+  && perl -0pi -e 's/(class Account < ApplicationRecord\n)/$1  has_many :connect_to_selections, dependent: :destroy\n/' app/models/account.rb \
+  && perl -0pi -e 's/(class Node < ApplicationRecord\n)/$1  has_many :connect_to_selections, dependent: :destroy\n/' app/models/node.rb \
+  # route to save the selection per network
+  && sed -i 's|      get :download|      get :download\n      patch :connect_tos|' config/routes.rb \
+  # ability: members may manage their own selections
+  && sed -i "s|      can :read, Node, network: { memberships: { account_id: account.id } }|      can :read, Node, network: { memberships: { account_id: account.id } }\n      can :connect_tos, Network, memberships: { account_id: account.id }\n      can :manage, ConnectToSelection, account_id: account.id|" app/models/ability.rb \
+  # controller action: persist the selected ConnectTo nodes for current_account
+  && printf '%s\n' \
+  '  def connect_tos' \
+  '    network = Network.find(params[:id])' \
+  '    node_ids = Array(params[:node_ids]).map(&:to_i) & network.node_ids' \
+  '    ConnectToSelection.where(account: current_account, node_id: network.node_ids).destroy_all' \
+  '    node_ids.each { |nid| ConnectToSelection.create!(account: current_account, node_id: nid) }' \
+  '    redirect_to network_path(network), notice: "ConnectTo nodes saved."' \
+  '  end' \
+  > /tmp/connect_tos_action.rb \
+  && sed -i '/def index/e cat /tmp/connect_tos_action.rb' app/controllers/networks_controller.rb \
+  && rm /tmp/connect_tos_action.rb \
+  # download: include the account'"'"'s saved ConnectTo nodes in tinc.conf
+  && perl -0pi -e 's/(conf = "Name = \#\{network\.name\}\\n\# Subnet: \#\{network\.subnet\}\\n")/$1\n        selected = network.nodes.joins(:connect_to_selections).where(connect_to_selections: { account_id: current_account.id })\n        selected.each { |n| conf << "ConnectTo = \#{n.name}\\n" }/' app/controllers/networks_controller.rb \
+  # UI: checkbox form on the network page to choose ConnectTo nodes
+  && printf '%s\n' \
+  '<h2>🔗 ConnectTo nodes</h2>' \
+  '<%= form_with url: connect_tos_network_path(@network), method: :patch do |form| %>' \
+  '  <% selected_ids = ConnectToSelection.where(account: current_account, node_id: @network.node_ids).pluck(:node_id) %>' \
+  '  <% @network.nodes.each do |node| %>' \
+  '    <label style="text-transform:none;display:block">' \
+  '      <%= check_box_tag "node_ids[]", node.id, selected_ids.include?(node.id) %> <%= node.name %>' \
+  '    </label>' \
+  '  <% end %>' \
+  '  <%= form.submit "Save ConnectTo" %>' \
+  '<% end %>' \
+  > app/views/networks/_connect_tos.html.erb \
+  && sed -i 's|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|<%= render "connect_tos" %>\n\n  <%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|' app/views/networks/show.html.erb \
+  && bundle exec rails db:migrate
+
 # ✨ Beautify the UI: emoji icons, a navbar, cards and a modern dark-glass theme
 RUN printf '%s\n' \
   ':root { --bg: #0f172a; --panel: rgba(30, 41, 59, 0.75); --accent: #38bdf8; --accent2: #a78bfa; --text: #e2e8f0; --muted: #94a3b8; }' \
