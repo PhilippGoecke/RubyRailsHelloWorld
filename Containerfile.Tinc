@@ -20,7 +20,7 @@ WORKDIR $HOME
 USER $USER
 
 # install Ruby, Node.js, Yarn
-ENV NODE_VERSION=24.18.1
+ENV NODE_VERSION=24.19.0
 RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
   && cd .nvm \
   && . $HOME/.nvm/nvm.sh \
@@ -231,6 +231,10 @@ RUN printf '%s\n' \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
   && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
+ENV RAILS_SERVE_STATIC_FILES=true
+# precompile assets so /assets/application.css and /assets/application.js exist
+RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
+
 # Migration Re-sequencer: rewrite all migration timestamps to stable, sequential IDs
 # (00000000000001, 00000000000002, ...) sorted by their original timestamp. This makes
 # migration filenames deterministic across builds so image layers stay cacheable and
@@ -312,10 +316,6 @@ RUN mkdir -p config/ssl \
   && openssl req -x509 -newkey rsa:4096 -nodes -keyout config/ssl/server.key -out config/ssl/server.crt -days 365 -subj "/CN=localhost"
 
 ENV RAILS_ENV=production
-ENV RAILS_SERVE_STATIC_FILES=true
-
-# precompile assets so /assets/application.css and /assets/application.js exist
-RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
 
 EXPOSE 3000
 
