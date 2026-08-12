@@ -213,6 +213,18 @@ RUN bundle exec rails generate model ConnectToSelection account:references node:
   && sed -i 's|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|<%= render "connect_tos" %>\n\n  <%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|' app/views/networks/show.html.erb \
   && bundle exec rails db:migrate
 
+# 👤 Every node belongs to the account that created it
+RUN bundle exec rails generate migration AddAccountToNodes account:references \
+  && perl -0pi -e 's/(class Node < ApplicationRecord\n)/$1  belongs_to :account\n/' app/models/node.rb \
+  && perl -0pi -e 's/(class Account < ApplicationRecord\n)/$1  has_many :nodes, dependent: :destroy\n/' app/models/account.rb \
+  # assign the creator automatically on create
+  && perl -0pi -e 's/(\@node = \@network\.nodes\.build\(node_params\))/$1\n    \@node.account = current_account/' app/controllers/nodes_controller.rb \
+  # members may only update/destroy their own nodes
+  && sed -i "s|      can :create, Node, network: { memberships: { account_id: account.id } }|      can :create, Node, network: { memberships: { account_id: account.id } }\n      can [:update, :destroy], Node, account_id: account.id|" app/models/ability.rb \
+  # show the creator on the node partial
+  && sed -i 's|<p>\n    <strong>Public key:</strong>|<p>\n    <strong>Created by:</strong>\n    <%= node.account\&.email %>\n  </p>\n\n  <p>\n    <strong>Public key:</strong>|' app/views/nodes/_node.html.erb \
+  && bundle exec rails db:migrate
+
 # ✨ Beautify the UI: emoji icons, a navbar, cards and a modern dark-glass theme
 RUN printf '%s\n' \
   ':root { --bg: #0f172a; --panel: rgba(30, 41, 59, 0.75); --accent: #38bdf8; --accent2: #a78bfa; --text: #e2e8f0; --muted: #94a3b8; }' \
