@@ -262,6 +262,64 @@ RUN printf '%s\n' \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
   && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
+# 📖 "How to connect" help page: OS-specific tinc client instructions inside the app
+RUN printf '%s\n' \
+  'class PagesController < ApplicationController' \
+  '  def connect' \
+  '  end' \
+  'end' \
+  > app/controllers/pages_controller.rb \
+  && sed -i 's|root "networks#index"|root "networks#index"\n  get "connect", to: "pages#connect"|' config/routes.rb \
+  && printf '%s\n' \
+  '<h1>📖 How to connect a client to the tinc VPN</h1>' \
+  '' \
+  '<h2>🐧 Linux</h2>' \
+  '<ol>' \
+  '  <li>Install tinc: <code>sudo apt install tinc</code> (Debian/Ubuntu) or <code>sudo dnf install tinc</code> (Fedora)</li>' \
+  '  <li>Create the network directory: <code>sudo mkdir -p /etc/tinc/&lt;netname&gt;/hosts</code></li>' \
+  '  <li>Create <code>/etc/tinc/&lt;netname&gt;/tinc.conf</code> with:<pre>Name = &lt;your_node_name&gt;' \
+  'ConnectTo = &lt;server_node_name&gt;' \
+  'Interface = tun0</pre></li>' \
+  '  <li>Generate keys: <code>sudo tincd -n &lt;netname&gt; -K4096</code></li>' \
+  '  <li>Exchange host files: copy your <code>/etc/tinc/&lt;netname&gt;/hosts/&lt;your_node_name&gt;</code> to the server, and place the server&#39;s host file in your <code>hosts/</code> directory.</li>' \
+  '  <li>Create tinc-up/tinc-down scripts (assign the VPN IP to the interface) and make them executable: <code>sudo chmod +x /etc/tinc/&lt;netname&gt;/tinc-{up,down}</code></li>' \
+  '  <li>Start the VPN: <code>sudo systemctl enable --now tinc@&lt;netname&gt;</code></li>' \
+  '</ol>' \
+  '' \
+  '<h2>🪟 Windows</h2>' \
+  '<ol>' \
+  '  <li>Download and install tinc for Windows from <a href="https://tinc-vpn.org/download/">tinc-vpn.org</a> (includes the TAP-Windows adapter driver).</li>' \
+  '  <li>Create the config directory: <code>C:\Program Files\tinc\&lt;netname&gt;\hosts</code></li>' \
+  '  <li>Create <code>tinc.conf</code> in that directory with:<pre>Name = &lt;your_node_name&gt;' \
+  'ConnectTo = &lt;server_node_name&gt;' \
+  'Interface = &lt;name of your TAP adapter, see Network Connections&gt;</pre></li>' \
+  '  <li>Generate keys (elevated command prompt): <code>"C:\Program Files\tinc\tinc.exe" -n &lt;netname&gt; generate-keys</code></li>' \
+  '  <li>Exchange host files with the server (as on Linux).</li>' \
+  '  <li>Set the VPN IP address on the TAP adapter via Network Connections (or a tinc-up.bat using netsh).</li>' \
+  '  <li>Install and start the service:<pre>tincd.exe -n &lt;netname&gt; --install-service' \
+  'net start "tinc.&lt;netname&gt;"</pre></li>' \
+  '</ol>' \
+  '' \
+  '<h2>🤖 Android</h2>' \
+  '<ol>' \
+  '  <li>Install the "Tinc App" (tinc mesh VPN app) from the Google Play Store or F-Droid. No root is required; it uses the Android VpnService API.</li>' \
+  '  <li>Create a new network in the app and set the network name (&lt;netname&gt;) and your node name.</li>' \
+  '  <li>The app generates a key pair; export/share your host file and add the server&#39;s host file under the network&#39;s hosts.</li>' \
+  '  <li>Configure your VPN IP address/subnet and add <code>ConnectTo = &lt;server_node_name&gt;</code>.</li>' \
+  '  <li>Toggle the connection on; accept the Android VPN permission prompt.</li>' \
+  '</ol>' \
+  '' \
+  '<h2>🍏 iPhone / iOS</h2>' \
+  '<p>There is no official tinc client for iOS, and iOS does not allow third-party TUN daemons outside the NetworkExtension framework. Options:</p>' \
+  '<ul>' \
+  '  <li>Run tinc on a gateway (e.g. a home router or Raspberry Pi) and connect the iPhone to that gateway via a supported protocol (WireGuard, IKEv2, or OpenVPN), routing traffic into the tinc mesh from there.</li>' \
+  '  <li>Alternatively, expose specific services over HTTPS instead of joining the iPhone to the mesh directly.</li>' \
+  '</ul>' \
+  > app/views/pages/connect.html.erb \
+  && mkdir -p app/views/pages \
+  && mv app/views/pages/connect.html.erb app/views/pages/ 2>/dev/null || true \
+  && sed -i 's|<a href="/nodes">🖥️ Nodes</a>|<a href="/nodes">🖥️ Nodes</a>\n        <a href="/connect">📖 How to connect</a>|' app/views/layouts/application.html.erb
+
 ENV RAILS_SERVE_STATIC_FILES=true
 # precompile assets so /assets/application.css and /assets/application.js exist
 RUN npm install --global esbuild \
