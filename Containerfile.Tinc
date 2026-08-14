@@ -270,6 +270,7 @@ RUN printf '%s\n' \
   'end' \
   > app/controllers/pages_controller.rb \
   && sed -i 's|root "networks#index"|root "networks#index"\n  get "connect", to: "pages#connect"|' config/routes.rb \
+  && mkdir -p app/views/pages \
   && printf '%s\n' \
   '<h1>📖 How to connect a client to the tinc VPN</h1>' \
   '' \
@@ -316,8 +317,6 @@ RUN printf '%s\n' \
   '  <li>Alternatively, expose specific services over HTTPS instead of joining the iPhone to the mesh directly.</li>' \
   '</ul>' \
   > app/views/pages/connect.html.erb \
-  && mkdir -p app/views/pages \
-  && mv app/views/pages/connect.html.erb app/views/pages/ 2>/dev/null || true \
   && sed -i 's|<a href="/nodes">🖥️ Nodes</a>|<a href="/nodes">🖥️ Nodes</a>\n        <a href="/connect">📖 How to connect</a>|' app/views/layouts/application.html.erb
 
 # 📨 Invitation URL + QR code integrated into the app: each node gets an invitation
