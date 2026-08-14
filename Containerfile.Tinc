@@ -320,6 +320,33 @@ RUN printf '%s\n' \
   && mv app/views/pages/connect.html.erb app/views/pages/ 2>/dev/null || true \
   && sed -i 's|<a href="/nodes">🖥️ Nodes</a>|<a href="/nodes">🖥️ Nodes</a>\n        <a href="/connect">📖 How to connect</a>|' app/views/layouts/application.html.erb
 
+# 📨 Invitation URL + QR code integrated into the app: each node gets an invitation
+# token; the node show page displays the invitation URL and a scannable QR code (SVG)
+RUN bundle add rqrcode \
+  && bundle exec rails generate migration AddInvitationTokenToNodes invitation_token:string:uniq \
+  && perl -0pi -e 's/(class Node < ApplicationRecord\n)/$1  has_secure_token :invitation_token\n/' app/models/node.rb \
+  && printf '%s\n' \
+  '  def invitation_url' \
+  '    Rails.application.routes.url_helpers.network_node_url(' \
+  '      network, self,' \
+  '      token: invitation_token,' \
+  '      host: ENV.fetch("APP_HOST", "localhost:3000"),' \
+  '      protocol: "https"' \
+  '    )' \
+  '  end' \
+  > /tmp/invitation_url_method.rb \
+  && sed -i '/^end$/e cat /tmp/invitation_url_method.rb' app/models/node.rb \
+  && rm /tmp/invitation_url_method.rb \
+  && printf '%s\n' \
+  '<h2>📨 Invitation</h2>' \
+  '<p><strong>Invitation URL:</strong> <%= link_to @node.invitation_url, @node.invitation_url %></p>' \
+  '<% require "rqrcode" %>' \
+  '<%= RQRCode::QRCode.new(@node.invitation_url).as_svg(module_size: 4).html_safe %>' \
+  > app/views/nodes/_invitation.html.erb \
+  && sed -i 's|<%= render @node %>|<%= render @node %>\n\n  <%= render "invitation" %>|' app/views/nodes/show.html.erb \
+  && bundle exec rails db:migrate \
+  && bundle exec rails runner 'Node.where(invitation_token: nil).find_each { |n| n.regenerate_invitation_token }'
+
 ENV RAILS_SERVE_STATIC_FILES=true
 # precompile assets so /assets/application.css and /assets/application.js exist
 RUN npm install --global esbuild \
