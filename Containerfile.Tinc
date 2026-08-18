@@ -290,9 +290,13 @@ RUN printf '%s\n' \
   'nav.topbar form { display: inline; margin: 0; }' \
   'nav.topbar button.linklike { background: none; border: none; padding: 0; font: inherit; font-weight: normal; color: var(--muted); cursor: pointer; transition: color 0.2s; }' \
   'nav.topbar button.linklike:hover { color: var(--accent); filter: none; transform: none; }' \
+  'form { display: inline; }' \
+  'button.linklike { background: none; border: none; padding: 0; font: inherit; font-weight: normal; color: var(--accent); cursor: pointer; text-decoration: none; }' \
+  'button.linklike:hover { text-decoration: underline; filter: none; transform: none; }' \
   > app/assets/stylesheets/theme.css \
   && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <%= link_to "🔐 Tinc VPNs", "/", class: "brand" %>\n      <% if account_signed_in? %>\n        <%= link_to "🌐 Networks", networks_path %>\n        <%= link_to "🖥️ Nodes", network_nodes_path(@network) if @network\&.id\&.present? %>\n        <% if current_account.admin? %>\n          <%= link_to "👥 Memberships", memberships_path %>\n        <% end %>\n        <%= button_to "🚪 Sign out", destroy_account_session_path, method: :delete, class: "linklike" %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
+  && sed -i 's|button_to "Destroy this network", @network, method: :delete %>|button_to "Destroy this network", @network, method: :delete, class: "linklike" if can? :destroy, @network %>|' app/views/networks/show.html.erb \
   && sed -i 's/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
 # 📖 "How to connect" help page: OS-specific tinc client instructions inside the app
