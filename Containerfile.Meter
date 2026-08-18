@@ -115,6 +115,10 @@ RUN bundle add chartkick \
   && echo '<%= line_chart meter_mean_usage_data_path(@meter, from: @from.strftime("%Y-%m-%dT%H:%M"), to: @to.strftime("%Y-%m-%dT%H:%M")), suffix: (@meter.kind == "power" ? " W" : " m³"), colors: [@meter.kind == "power" ? "#198754" : "#0dcaf0"], xtitle: "Date", ytitle: (@meter.kind == "power" ? "Mean power (Watt)" : "Mean water (m³)"), height: "300px" %>' >> app/views/meters/usage.html.erb \
   && echo '<p class="mt-3"><%= link_to "⬅️ Back to meter", @meter, class: "btn btn-secondary" %></p>' >> app/views/meters/usage.html.erb \
   && sed -i 's|<%= link_to "Edit this meter", edit_meter_path(@meter) %>|<%= link_to "📈 Usage plot", meter_usage_path(@meter), class: "btn btn-info" %>\n  <%= link_to "✏️ Edit this meter", edit_meter_path(@meter) %>|' app/views/meters/show.html.erb \
+  # meter show: paginated list of readings, latest first
+  && bundle add kaminari \
+  && sed -i '/def show/a \ \ \ \ @readings = @meter.readings.order(recorded_at: :desc).page(params[:page]).per(10)' app/controllers/meters_controller.rb \
+  && echo '<h2 class="mt-4">📋 Readings</h2><table class="table table-striped w-auto"><thead><tr><th>Recorded at</th><th>Value</th><th></th></tr></thead><tbody><% @readings.each do |reading| %><tr><td><%= reading.recorded_at %></td><td><%= reading.value %> <%= @meter.unit %></td><td><%= link_to "Show", reading %></td></tr><% end %></tbody></table><%= paginate @readings %>' >> app/views/meters/show.html.erb \
   # meter form: dropdown for kind, unit auto-selected based on kind
   && sed -i 's|<%= form.text_field :kind %>|<%= form.select :kind, options_for_select([["Water 💧", "water"], ["Power ⚡", "power"]], meter.kind), { include_blank: "Select kind" }, { id: "meter_kind", class: "form-control", onchange: "document.getElementById(\x27meter_unit\x27).value = this.value === \x27power\x27 ? \x27W\x27 : this.value === \x27water\x27 ? \x27m3\x27 : \x27\x27;" } %>|' app/views/meters/_form.html.erb \
   && sed -i 's|<%= form.text_field :unit %>|<%= form.text_field :unit, id: "meter_unit", class: "form-control", readonly: true %>|' app/views/meters/_form.html.erb \
