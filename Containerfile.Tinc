@@ -84,6 +84,7 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   && sed -i 's| nodes_path| network_nodes_path(@node.network)|' app/views/nodes/new.html.erb \
   && sed -i 's| nodes_path| network_nodes_path(@node.network)|' app/views/nodes/show.html.erb \
   && sed -i 's|edit_node_path(@node)|edit_network_node_path(@node.network, @node)|g' app/views/nodes/show.html.erb \
+  && sed -i 's|button_to "Destroy this node", @node|button_to "Destroy this node", network_node_path(@node.network, @node)|' app/views/nodes/show.html.erb \
   && sed -i 's| nodes_path| network_nodes_path(@node.network)|' app/views/nodes/edit.html.erb \
   && sed -i 's| new_node_path| new_network_node_path(@network)|' app/views/nodes/index.html.erb \
   && bundle exec rails db:prepare
