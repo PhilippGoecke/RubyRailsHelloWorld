@@ -151,6 +151,7 @@ RUN bundle add devise \
   && sed -i 's|<%= form.text_field :network_id %>|<%= form.collection_select :network_id, Network.all, :id, :name %>|' app/views/memberships/_form.html.erb \
   && sed -i 's|<%= membership.account_id %>|<%= membership.account\&.email %>|' app/views/memberships/_membership.html.erb \
   && sed -i 's|<%= membership.network_id %>|<%= membership.network\&.name %>|' app/views/memberships/_membership.html.erb \
+  && sed -i 's|<%= render @memberships %>|<% @memberships.group_by(\&:network).each do \|network, memberships\| %>\n    <h2><%= network\&.name %></h2>\n    <%= render memberships %>\n  <% end %>|' app/views/memberships/index.html.erb \
   # show all members of a network on the network show page
   && printf '%s\n' \
   '<h2>👥 Members</h2>' \
