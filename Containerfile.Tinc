@@ -149,6 +149,8 @@ RUN bundle add devise \
   && sed -i 's/class MembershipsController < ApplicationController/class MembershipsController < ApplicationController\n  load_and_authorize_resource/' app/controllers/memberships_controller.rb \
   && sed -i 's|<%= form.text_field :account_id %>|<%= form.collection_select :account_id, Account.all, :id, :email %>|' app/views/memberships/_form.html.erb \
   && sed -i 's|<%= form.text_field :network_id %>|<%= form.collection_select :network_id, Network.all, :id, :name %>|' app/views/memberships/_form.html.erb \
+  && sed -i 's|<%= membership.account_id %>|<%= membership.account\&.email %>|' app/views/memberships/_membership.html.erb \
+  && sed -i 's|<%= membership.network_id %>|<%= membership.network\&.name %>|' app/views/memberships/_membership.html.erb \
   # show all members of a network on the network show page
   && printf '%s\n' \
   '<h2>👥 Members</h2>' \
