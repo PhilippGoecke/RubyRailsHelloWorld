@@ -129,7 +129,48 @@ RUN bundle add chartkick \
   && sed -i '/def show/i \ \ # export readings as Excel file\n  def export\n    @meter = Meter.find(params[:id])\n    package = Axlsx::Package.new\n    package.workbook.add_worksheet(name: "Readings") do |sheet|\n      sheet.add_row ["Recorded At", "Value"]\n      @meter.readings.order(:recorded_at).each do |r|\n        sheet.add_row [r.recorded_at.strftime("%Y-%m-%d %H:%M:%S"), r.value.to_f]\n      end\n    end\n    send_data package.to_stream.read, filename: "#{@meter.name.parameterize}-readings.xlsx", type: "application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet"\n  end\n\n  # import readings from Excel file\n  def import\n    @meter = Meter.find(params[:id])\n    if params[:file].blank?\n      redirect_to @meter, alert: "Please select an Excel file." and return\n    end\n    xlsx = Roo::Spreadsheet.open(params[:file].tempfile.path, extension: :xlsx)\n    count = 0\n    xlsx.sheet(0).each_row_streaming(offset: 1) do |row|\n      recorded_at = row[0]&.value\n      value = row[1]&.value\n      next if recorded_at.blank? || value.blank?\n      recorded_at = Time.zone.parse(recorded_at.to_s) unless recorded_at.is_a?(Time) || recorded_at.is_a?(DateTime)\n      @meter.readings.create!(recorded_at: recorded_at, value: value)\n      count += 1\n    end\n    redirect_to @meter, notice: "Imported #{count} readings."\n  rescue => e\n    redirect_to @meter, alert: "Import failed: #{e.message}"\n  end\n' app/controllers/meters_controller.rb \
   # import readings from a Shelly Pro 3EM CSV export (per-interval active energy in Wh)
   && sed -i 's/# root/post "meters\/:id\/import_shelly", to: "meters#import_shelly", as: :meter_import_shelly\n  # root/g' config/routes.rb \
-  && sed -i '/def show/i \ \ # import readings from a Shelly Pro 3EM CSV export\n  # expected columns: a timestamp column and per-interval active energy columns (Wh),\n  # e.g. "timestamp,a_total_act_energy,b_total_act_energy,c_total_act_energy" or "total_act_energy"\n  def import_shelly\n    @meter = Meter.find(params[:id])\n    if params[:file].blank?\n      redirect_to @meter, alert: "Please select a Shelly Pro 3EM CSV file." and return\n    end\n    require "csv"\n    rows = CSV.read(params[:file].tempfile.path, headers: true)\n    ts_col = rows.headers.find { |h| h.to_s =~ \/timestamp|time|date\/i }\n    energy_cols = rows.headers.select { |h| h.to_s =~ \/act_energy\/i \&\& h.to_s !~ \/ret\/i }\n    if ts_col.nil? || energy_cols.empty?\n      redirect_to @meter, alert: "Unrecognized Shelly Pro 3EM CSV format." and return\n    end\n    value = @meter.readings.order(:recorded_at).last\&.value.to_f\n    count = 0\n    rows.each do |row|\n      ts = row[ts_col]\n      next if ts.blank?\n      recorded_at = ts.to_s =~ \/\\A\\d+(\\.\\d+)?\\z\/ ? Time.zone.at(ts.to_f) : Time.zone.parse(ts.to_s)\n      interval_wh = energy_cols.sum { |c| row[c].to_f }\n      value += interval_wh\n      @meter.readings.create!(recorded_at: recorded_at, value: value.round(3))\n      count += 1\n    end\n    redirect_to @meter, notice: "Imported #{count} Shelly readings."\n  rescue => e\n    redirect_to @meter, alert: "Shelly import failed: #{e.message}"\n  end\n' app/controllers/meters_controller.rb \
+  && sed -i '/def show/i \ \ # import readings from a Shelly Pro 3EM CSV export (async via ActiveJob for huge files)\n  def import_shelly\n    @meter = Meter.find(params[:id])\n    if params[:file].blank?\n      redirect_to @meter, alert: "Please select a Shelly Pro 3EM CSV file." and return\n    end\n    dir = Rails.root.join("tmp", "shelly_imports")\n    FileUtils.mkdir_p(dir)\n    path = dir.join("#{SecureRandom.uuid}.csv")\n    FileUtils.cp(params[:file].tempfile.path, path)\n    ShellyImportJob.perform_later(@meter.id, path.to_s)\n    redirect_to @meter, notice: "Shelly import started in the background. Readings will appear shortly."\n  rescue => e\n    redirect_to @meter, alert: "Shelly import failed: #{e.message}"\n  end\n' app/controllers/meters_controller.rb \
+  && mkdir -p app/jobs \
+  && printf '%s\n' \
+    '# Processes a Shelly Pro 3EM CSV export in the background, streaming the file' \
+    '# row by row and inserting readings in batches so huge files can be handled.' \
+    'class ShellyImportJob < ApplicationJob' \
+    '  queue_as :default' \
+    '' \
+    '  BATCH_SIZE = 1000' \
+    '' \
+    '  def perform(meter_id, path)' \
+    '    require "csv"' \
+    '    meter = Meter.find(meter_id)' \
+    '    ts_col = nil' \
+    '    energy_cols = nil' \
+    '    value = meter.readings.order(:recorded_at).last&.value.to_f' \
+    '    batch = []' \
+    '    count = 0' \
+    '    CSV.foreach(path, headers: true) do |row|' \
+    '      if ts_col.nil?' \
+    '        ts_col = row.headers.find { |h| h.to_s =~ /timestamp|time|date/i }' \
+    '        energy_cols = row.headers.select { |h| h.to_s =~ /act_energy/i && h.to_s !~ /ret/i }' \
+    '        raise "Unrecognized Shelly Pro 3EM CSV format" if ts_col.nil? || energy_cols.empty?' \
+    '      end' \
+    '      ts = row[ts_col]' \
+    '      next if ts.blank?' \
+    '      recorded_at = ts.to_s =~ /\A\d+(\.\d+)?\z/ ? Time.zone.at(ts.to_f) : Time.zone.parse(ts.to_s)' \
+    '      value += energy_cols.sum { |c| row[c].to_f }' \
+    '      now = Time.zone.now' \
+    '      batch << { meter_id: meter.id, recorded_at: recorded_at, value: value.round(3), created_at: now, updated_at: now }' \
+    '      count += 1' \
+    '      if batch.size >= BATCH_SIZE' \
+    '        Reading.insert_all!(batch)' \
+    '        batch = []' \
+    '      end' \
+    '    end' \
+    '    Reading.insert_all!(batch) if batch.any?' \
+    '    Rails.logger.info("[ShellyImportJob] imported #{count} readings for meter #{meter.id}")' \
+    '  ensure' \
+    '    File.delete(path) if File.exist?(path)' \
+    '  end' \
+    'end' > app/jobs/shelly_import_job.rb \
   && sed -i 's|<%= link_to "📈 Usage plot", meter_usage_path(@meter), class: "btn btn-info" %>|<%= link_to "📈 Usage plot", meter_usage_path(@meter), class: "btn btn-info" %>\n  <%= link_to "📥 Export Excel", meter_export_path(@meter), class: "btn btn-success" %>\n  <%= form_with url: meter_import_path(@meter), method: :post, class: "d-inline-flex gap-2 mt-2" do \|f\| %>\n    <%= f.file_field :file, accept: ".xlsx", class: "form-control form-control-sm w-auto" %>\n    <%= f.submit "📤 Import Excel", class: "btn btn-warning btn-sm" %>\n  <% end %>\n  <%= form_with url: meter_import_shelly_path(@meter), method: :post, class: "d-inline-flex gap-2 mt-2" do \|f\| %>\n    <%= f.file_field :file, accept: ".csv", class: "form-control form-control-sm w-auto" %>\n    <%= f.submit "🔌 Import Shelly Pro 3EM CSV", class: "btn btn-warning btn-sm" %>\n  <% end %>|' app/views/meters/show.html.erb \
   && sed -i 's|<h1>Meters</h1>|<h1>🧮 Meters</h1>|' app/views/meters/index.html.erb 2>/dev/null || true \
   && bundle exec rails javascript:build \
