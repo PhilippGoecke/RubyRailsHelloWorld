@@ -290,9 +290,9 @@ RUN printf '%s\n' \
   'nav.topbar button.linklike { background: none; border: none; padding: 0; font: inherit; font-weight: normal; color: var(--muted); cursor: pointer; transition: color 0.2s; }' \
   'nav.topbar button.linklike:hover { color: var(--accent); filter: none; transform: none; }' \
   > app/assets/stylesheets/theme.css \
-  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <%= link_to "🔐 Tinc VPNs", "/", class: "brand" %>\n      <% if account_signed_in? %>\n        <%= link_to "🌐 Networks", networks_path %>\n        <%= link_to "🖥️ Nodes", "/nodes" %>\n        <% if current_account.admin? %>\n          <%= link_to "👥 Memberships", memberships_path %>\n        <% end %>\n        <%= button_to "🚪 Sign out", destroy_account_session_path, method: :delete, class: "linklike" %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
+  && sed -i 's|<body>|<body>\n    <nav class="topbar">\n      <%= link_to "🔐 Tinc VPNs", "/", class: "brand" %>\n      <% if account_signed_in? %>\n        <%= link_to "🌐 Networks", networks_path %>\n        <%= link_to "🖥️ Nodes", network_nodes_path(@network) if @network %>\n        <% if current_account.admin? %>\n          <%= link_to "👥 Memberships", memberships_path %>\n        <% end %>\n        <%= button_to "🚪 Sign out", destroy_account_session_path, method: :delete, class: "linklike" %>\n      <% end %>\n    </nav>|' app/views/layouts/application.html.erb \
   && sed -i 's|</body>|  <footer>⚡ Powered by Rails · 🛡️ Secure tinc VPN management</footer>\n  </body>|' app/views/layouts/application.html.erb \
-  && sed -i 's/<h1>Networks<\/h1>/<h1>Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
+  && sed -i 's/<h1>Networks<\/h1>/<h1>🌐 Networks<\/h1>/;s/New network/🆕 New network/g' app/views/networks/index.html.erb || true
 
 # 📖 "How to connect" help page: OS-specific tinc client instructions inside the app
 RUN printf '%s\n' \
@@ -349,7 +349,7 @@ RUN printf '%s\n' \
   '  <li>Alternatively, expose specific services over HTTPS instead of joining the iPhone to the mesh directly.</li>' \
   '</ul>' \
   > app/views/pages/connect.html.erb \
-  && sed -i 's|<%= link_to "🖥️ Nodes", "/nodes" %>|<%= link_to "🖥️ Nodes", "/nodes" %>\n        <a href="/connect">📖 How to connect</a>|' app/views/layouts/application.html.erb
+  && sed -i 's|<%= link_to "🖥️ Nodes", network_nodes_path(@network) if @network %>|<%= link_to "🖥️ Nodes", network_nodes_path(@network) if @network %>\n        <a href="/connect">📖 How to connect</a>|' app/views/layouts/application.html.erb
 
 # 📨 Invitation URL + QR code integrated into the app: each node gets an invitation
 # token; the node show page displays the invitation URL and a scannable QR code (SVG)
