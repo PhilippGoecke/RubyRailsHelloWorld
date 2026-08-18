@@ -92,8 +92,8 @@ RUN bundle exec rails generate scaffold Network name:string:uniq subnet:string d
   '<h2>🖥️ Nodes</h2>' \
   '<% if @network.nodes.any? %>' \
   '  <ul>' \
-  '    <% @network.nodes.each do |node| %>' \
-  '      <li><%= link_to "#{node.name} (#{node.ip})", network_node_path(@network, node) %></li>' \
+  '    <% @network.nodes.sort_by { |node| IPAddr.new(node.ip.presence || "0.0.0.0") }.each do |node| %>' \
+  '      <li><%= link_to "#{node.name} (#{node.account&.email}) - #{node.ip}", network_node_path(@network, node) %></li>' \
   '    <% end %>' \
   '  </ul>' \
   '<% else %>' \
