@@ -117,7 +117,7 @@ RUN bundle add devise \
   && sed -i 's/add_column :accounts, :admin, :boolean/add_column :accounts, :admin, :boolean, default: false, null: false/' db/migrate/*_add_admin_to_accounts.rb \
   && bundle exec rails generate scaffold Membership account:references network:references \
   && sed -i 's/class Membership < ApplicationRecord/class Membership < ApplicationRecord\n  validates :account_id, uniqueness: { scope: :network_id }/' app/models/membership.rb \
-  && sed -i 's|button_to "Destroy this membership", @membership, method: :delete %>|button_to "Destroy this membership", @membership, method: :delete, data: { turbo_confirm: "Are you sure?" } %>|' app/views/memberships/show.html.erb \
+  && sed -i 's|button_to "Destroy this membership", @membership, method: :delete %>|button_to "Destroy this membership", @membership, method: :delete, class: "linklike", data: { turbo_confirm: "Are you sure?" } %>|' app/views/memberships/show.html.erb \
   && sed -i 's/has_many :nodes, dependent: :destroy/has_many :nodes, dependent: :destroy\n  has_many :memberships, dependent: :destroy\n  has_many :accounts, through: :memberships/' app/models/network.rb \
   && printf '%s\n' \
   'class Ability' \
