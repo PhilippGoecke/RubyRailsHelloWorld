@@ -183,17 +183,18 @@ RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n    
   && printf '%s\n' \
   '  def download' \
   '    network = Network.find(params[:id])' \
+  '    node = network.nodes.find(params[:node_id]) if params[:node_id].present?' \
   '    require "rubygems/package"' \
   '    require "zlib"' \
   '    require "stringio"' \
   '    io = StringIO.new' \
   '    Zlib::GzipWriter.wrap(io) do |gz|' \
   '      Gem::Package::TarWriter.new(gz) do |tar|' \
-  '        conf = "Name = #{network.name}\n# Subnet: #{network.subnet}\n"' \
+  '        conf = "Name = #{node&.name || network.name}\n# Subnet: #{network.subnet}\n"' \
   '        tar.add_file_simple("#{network.name}/tinc.conf", 0o644, conf.bytesize) { |f| f.write(conf) }' \
-  '        network.nodes.each do |node|' \
-  '          host = "Address = #{node.dns.presence || node.ip}\nSubnet = #{node.ip}/32\n\n#{node.public_key}\n"' \
-  '          tar.add_file_simple("#{network.name}/hosts/#{node.name}", 0o644, host.bytesize) { |f| f.write(host) }' \
+  '        network.nodes.each do |n|' \
+  '          host = "Address = #{n.dns.presence || n.ip}\nSubnet = #{n.ip}/32\n\n#{n.public_key}\n"' \
+  '          tar.add_file_simple("#{network.name}/hosts/#{n.name}", 0o644, host.bytesize) { |f| f.write(host) }' \
   '        end' \
   '      end' \
   '    end' \
@@ -202,7 +203,7 @@ RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n    
   > /tmp/download_action.rb \
   && sed -i '/def index/e cat /tmp/download_action.rb' app/controllers/networks_controller.rb \
   && rm /tmp/download_action.rb \
-  && sed -i 's|<%= link_to "Edit this network"|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb || true
+  && sed -i 's|link_to "Edit this node", edit_network_node_path(@node.network, @node) if can? :update, @node %>|link_to "📦 Download .tar.gz", download_network_path(@node.network, node_id: @node.id) %>\n\n  <%= link_to "Edit this node", edit_network_node_path(@node.network, @node) if can? :update, @node %>|' app/views/nodes/show.html.erb
 
 # 🔒 Add a Tinc VPN favicon (emoji-based SVG)
 RUN printf '%s\n' \
@@ -238,7 +239,7 @@ RUN bundle exec rails generate model ConnectToSelection account:references node:
   && sed -i '/def index/e cat /tmp/connect_tos_action.rb' app/controllers/networks_controller.rb \
   && rm /tmp/connect_tos_action.rb \
   # download: include the account'"'"'s saved ConnectTo nodes in tinc.conf
-  && perl -0pi -e 's/(conf = "Name = \#\{network\.name\}\\n\# Subnet: \#\{network\.subnet\}\\n")/$1\n        selected = network.nodes.joins(:connect_to_selections).where(connect_to_selections: { account_id: current_account.id })\n        selected.each { |n| conf << "ConnectTo = \#{n.name}\\n" }/' app/controllers/networks_controller.rb \
+  && perl -0pi -e 's/(conf = "Name = \#\{node&\.name \|\| network\.name\}\\n\# Subnet: \#\{network\.subnet\}\\n")/$1\n        selected = network.nodes.joins(:connect_to_selections).where(connect_to_selections: { account_id: current_account.id })\n        selected.each { |n| conf << "ConnectTo = \#{n.name}\\n" }/' app/controllers/networks_controller.rb \
   # UI: checkbox form on the network page to choose ConnectTo nodes
   && printf '%s\n' \
   '<h2>🔗 ConnectTo nodes</h2>' \
@@ -252,7 +253,7 @@ RUN bundle exec rails generate model ConnectToSelection account:references node:
   '  <%= form.submit "Save ConnectTo" %>' \
   '<% end %>' \
   > app/views/networks/_connect_tos.html.erb \
-  && sed -i 's|<%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|<%= render "connect_tos" %>\n\n  <%= link_to "📦 Download .tar.gz", download_network_path(@network) %>|' app/views/networks/show.html.erb \
+  && sed -i 's|<%= link_to "Edit this network"|<%= render "connect_tos" %>\n\n  <%= link_to "Edit this network"|' app/views/networks/show.html.erb \
   && bundle exec rails db:migrate
 
 # 👤 Every node belongs to the account that created it
