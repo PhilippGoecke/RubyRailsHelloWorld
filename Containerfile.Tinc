@@ -192,6 +192,12 @@ RUN sed -i 's|resources :networks do|resources :networks do\n    member do\n    
   '      Gem::Package::TarWriter.new(gz) do |tar|' \
   '        conf = "Name = #{node&.name || network.name}\n# Subnet: #{network.subnet}\n"' \
   '        tar.add_file_simple("#{network.name}/tinc.conf", 0o644, conf.bytesize) { |f| f.write(conf) }' \
+  '        if node' \
+  '          tinc_up = "#!/bin/sh\nip addr add #{node.ip}/32 dev $INTERFACE\nip link set $INTERFACE up\n"' \
+  '          tinc_down = "#!/bin/sh\nip addr del #{node.ip}/32 dev $INTERFACE\nip link set $INTERFACE down\n"' \
+  '          tar.add_file_simple("#{network.name}/tinc-up", 0o755, tinc_up.bytesize) { |f| f.write(tinc_up) }' \
+  '          tar.add_file_simple("#{network.name}/tinc-down", 0o755, tinc_down.bytesize) { |f| f.write(tinc_down) }' \
+  '        end' \
   '        network.nodes.each do |n|' \
   '          host = "Address = #{n.dns.presence || n.ip}\nSubnet = #{n.ip}/32\n\n#{n.public_key}\n"' \
   '          tar.add_file_simple("#{network.name}/hosts/#{n.name}", 0o644, host.bytesize) { |f| f.write(host) }' \
