@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.4
-FROM ruby:3.3-slim
+FROM ruby:4.0.7-slim
 
 ENV RAILS_ENV=production \
+    PORT=3009 \
     RAILS_LOG_TO_STDOUT=true \
     RAILS_SERVE_STATIC_FILES=true \
     SECRET_KEY_BASE=replace-this-before-internet-deployment
@@ -14,11 +15,12 @@ RUN apt-get update -qq && \
 
 RUN <<'EOF' cat > Gemfile
 source "https://rubygems.org"
-gem "rails", "~> 7.1.3"
-gem "sqlite3", "~> 1.4"
-gem "puma", ">= 5.0"
+gem "rails", "~> 8.1.2"
+gem "sqlite3", ">= 2.1"
+gem "puma", ">= 7.0"
 EOF
 
+RUN gem update --system && gem install bundler
 RUN bundle install
 
 RUN mkdir -p app/controllers app/models app/views/calendar app/views/entries app/views/layouts config/environments db/migrate storage tmp/pids
@@ -35,7 +37,7 @@ Bundler.require(*Rails.groups)
 
 module FamilyCalendar
   class Application < Rails::Application
-    config.load_defaults 7.1
+    config.load_defaults 8.1
     config.time_zone = "UTC"
   end
 end
@@ -73,12 +75,16 @@ pidfile "tmp/pids/server.pid"
 EOF
 
 RUN <<'EOF' cat > config/environments/production.rb
+require "active_support/core_ext/integer/time"
+
 Rails.application.configure do
   config.eager_load = true
   config.consider_all_requests_local = false
   config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?
+  config.assets.compile = false
   config.log_level = :info
   config.logger = ActiveSupport::Logger.new($stdout)
+  config.log_tags = [:request_id]
   config.force_ssl = false
 end
 EOF
@@ -206,7 +212,7 @@ end
 EOF
 
 RUN <<'EOF' cat > db/migrate/20260916000000_create_calendar_entries.rb
-class CreateCalendarEntries < ActiveRecord::Migration[7.1]
+class CreateCalendarEntries < ActiveRecord::Migration[8.1]
   def change
     create_table :calendar_entries do |t|
       t.string :title, null: false
@@ -313,6 +319,6 @@ EOF
 
 VOLUME ["/rails/storage"]
 
-EXPOSE 3000
+EXPOSE 3009
 
-CMD ["sh", "-c", "bundle exec rails db:prepare && exec bundle exec rails server -b 0.0.0.0"]
+CMD ["sh", "-c", "bundle exec rails db:prepare && exec bundle exec rails server -b '::' -p 3009"]
