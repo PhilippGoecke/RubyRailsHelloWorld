@@ -1,0 +1,461 @@
+# syntax=docker/dockerfile:1.7
+
+# A self-contained production image for a shared family calendar.
+# Build: podman build -f Containerfile.Calendar.yaml -t family-calendar .
+# Run:   podman run --rm -p "[::]:3009:3009" -v family-calendar-data:/rails/storage family-calendar
+
+ARG RUBY_VERSION=4.0.7
+ARG RAILS_VERSION=8.1.3.1
+
+FROM ruby:${RUBY_VERSION}-slim-trixie AS build
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    RAILS_ENV=production \
+    RACK_ENV=production \
+    BUNDLE_DEPLOYMENT=1 \
+    BUNDLE_WITHOUT="development:test" \
+    BUNDLE_FROZEN=1 \
+    BUNDLE_PATH=/usr/local/bundle \
+    LANG=C.UTF-8
+
+WORKDIR /rails
+
+# Only build dependencies exist in this stage.
+RUN apt-get update -qq &amp;&amp; \
+    apt-get install --no-install-recommends -y \
+      build-essential \
+      libsqlite3-dev \
+      pkg-config &amp;&amp; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN gem install --no-document rails:${RAILS_VERSION} &amp;&amp; \
+    rails new . \
+      --database=sqlite3 \
+      --skip-git \
+      --skip-javascript \
+      --skip-hotwire \
+      --skip-test \
+      --skip-system-test \
+      --skip-bundle
+
+# Add the calendar's persistence model, database schema, controllers, routes,
+# responsive views, and startup script without requiring source files outside
+# this Containerfile.
+RUN ruby &lt;&lt;'RUBY'
+File.write("app/models/family_member.rb", &lt;&lt;~RUBY)
+  class FamilyMember &lt; ApplicationRecord
+    has_many :events, dependent: :restrict_with_error
+
+    validates :name, presence: true, length: { maximum: 50 }
+    validates :color, format: { with: /\A#[0-9a-fA-F]{6}\z/ }
+  end
+RUBY
+
+File.write("app/models/event.rb", &lt;&lt;~RUBY)
+  class Event &lt; ApplicationRecord
+    belongs_to :family_member
+
+    validates :title, presence: true, length: { maximum: 120 }
+    validates :starts_at, :ends_at, presence: true
+    validate :ends_after_start
+
+    private
+
+    def ends_after_start
+      return if starts_at.blank? || ends_at.blank? || ends_at &gt; starts_at
+
+      errors.add(:ends_at, "must be after the start time")
+    end
+  end
+RUBY
+
+File.write("db/migrate/20260916100000_create_family_calendar.rb", &lt;&lt;~RUBY)
+  class CreateFamilyCalendar &lt; ActiveRecord::Migration[8.1]
+    def change
+      create_table :family_members do |t|
+        t.string :name, null: false
+        t.string :color, null: false, default: "#2563eb"
+        t.timestamps
+      end
+
+      create_table :events do |t|
+        t.references :family_member, null: false, foreign_key: true
+        t.string :title, null: false
+        t.datetime :starts_at, null: false
+        t.datetime :ends_at, null: false
+        t.text :notes
+        t.timestamps
+      end
+
+      add_index :events, :starts_at
+      add_index :events, :ends_at
+    end
+  end
+RUBY
+
+File.write("app/controllers/events_controller.rb", &lt;&lt;~RUBY)
+  class EventsController &lt; ApplicationController
+    before_action :set_event, only: %i[edit update destroy]
+
+    def index
+      @view = params[:view].presence_in(%w[day week month]) || "month"
+      @date = Date.parse(params.fetch(:date, Date.current.to_s))
+      @family_members = FamilyMember.order(:name)
+      @range = calendar_range
+      @events = Event.includes(:family_member)
+                     .where(starts_at: @range.begin.beginning_of_day..@range.end.end_of_day)
+                     .order(:starts_at)
+      @events = @events.where(family_member_id: params[:member_id]) if params[:member_id].present?
+    rescue Date::Error
+      redirect_to events_path, alert: "The requested date is invalid."
+    end
+
+    def new
+      @event = Event.new(starts_at: Time.current.change(min: 0), ends_at: 1.hour.from_now.change(min: 0))
+    end
+
+    def create
+      @event = Event.new(event_params)
+      if @event.save
+        redirect_to events_path, notice: "Appointment added."
+      else
+        render :new, status: :unprocessable_entity
+      end
+    end
+
+    def edit; end
+
+    def update
+      if @event.update(event_params)
+        redirect_to events_path, notice: "Appointment updated."
+      else
+        render :edit, status: :unprocessable_entity
+      end
+    end
+
+    def destroy
+      @event.destroy!
+      redirect_to events_path, notice: "Appointment deleted."
+    end
+
+    private
+
+    def set_event
+      @event = Event.find(params[:id])
+    end
+
+    def event_params
+      params.require(:event).permit(:title, :starts_at, :ends_at, :notes, :family_member_id)
+    end
+
+    def calendar_range
+      case @view
+      when "day" then @date..@date
+      when "week" then @date.beginning_of_week..@date.end_of_week
+      else @date.beginning_of_month.beginning_of_week..@date.end_of_month.end_of_week
+      end
+    end
+  end
+RUBY
+
+File.write("app/controllers/family_members_controller.rb", &lt;&lt;~RUBY)
+  class FamilyMembersController &lt; ApplicationController
+    before_action :set_family_member, only: %i[edit update destroy]
+
+    def index
+      @family_members = FamilyMember.order(:name)
+    end
+
+    def new
+      @family_member = FamilyMember.new(color: "#2563eb")
+    end
+
+    def create
+      @family_member = FamilyMember.new(family_member_params)
+      if @family_member.save
+        redirect_to family_members_path, notice: "Family member added."
+      else
+        render :new, status: :unprocessable_entity
+      end
+    end
+
+    def edit; end
+
+    def update
+      if @family_member.update(family_member_params)
+        redirect_to family_members_path, notice: "Family member updated."
+      else
+        render :edit, status: :unprocessable_entity
+      end
+    end
+
+    def destroy
+      @family_member.destroy
+      redirect_to family_members_path, notice: "Family member removed."
+    end
+
+    private
+
+    def set_family_member
+      @family_member = FamilyMember.find(params[:id])
+    end
+
+    def family_member_params
+      params.require(:family_member).permit(:name, :color)
+    end
+  end
+RUBY
+
+File.write("config/routes.rb", &lt;&lt;~RUBY)
+  Rails.application.routes.draw do
+    root "events#index"
+    resources :events, except: :show
+    resources :family_members, except: :show
+    get "up" =&gt; "rails/health#show", as: :rails_health_check
+  end
+RUBY
+
+File.write("config/database.yml", &lt;&lt;~YAML)
+  default: &amp;default
+    adapter: sqlite3
+    pool: &lt;%= ENV.fetch("RAILS_MAX_THREADS", 5) %&gt;
+    timeout: 5000
+
+  development:
+    &lt;&lt;: *default
+    database: storage/development.sqlite3
+
+  test:
+    &lt;&lt;: *default
+    database: storage/test.sqlite3
+
+  production:
+    &lt;&lt;: *default
+    database: &lt;%= ENV.fetch("SQLITE_DATABASE", Rails.root.join("storage", "production.sqlite3")) %&gt;
+YAML
+
+File.write("db/seeds.rb", &lt;&lt;~RUBY)
+  [
+    ["Alex", "#2563eb"],
+    ["Sam", "#db2777"],
+    ["Jordan", "#059669"]
+  ].each do |name, color|
+    FamilyMember.find_or_create_by!(name:) { |member| member.color = color }
+  end
+RUBY
+
+File.write("app/views/layouts/application.html.erb", &lt;&lt;~ERB)
+  &lt;!DOCTYPE html&gt;
+  &lt;html lang="en"&gt;
+    &lt;head&gt;
+      &lt;title&gt;Family Calendar&lt;/title&gt;
+      &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+      &lt;%= csrf_meta_tags %&gt;
+      &lt;%= csp_meta_tag %&gt;
+      &lt;%= stylesheet_link_tag "application", "data-turbo-track": "reload" %&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+      &lt;header class="topbar"&gt;
+        &lt;%= link_to "Family Calendar", root_path, class: "brand" %&gt;
+        &lt;nav&gt;
+          &lt;%= link_to "Calendar", root_path %&gt;
+          &lt;%= link_to "Family", family_members_path %&gt;
+          &lt;%= link_to "+ Appointment", new_event_path, class: "button" %&gt;
+        &lt;/nav&gt;
+      &lt;/header&gt;
+      &lt;main class="page"&gt;
+        &lt;% if notice %&gt;&lt;p class="notice"&gt;&lt;%= notice %&gt;&lt;/p&gt;&lt;% end %&gt;
+        &lt;% if alert %&gt;&lt;p class="alert"&gt;&lt;%= alert %&gt;&lt;/p&gt;&lt;% end %&gt;
+        &lt;%= yield %&gt;
+      &lt;/main&gt;
+    &lt;/body&gt;
+  &lt;/html&gt;
+ERB
+
+File.write("app/views/events/index.html.erb", &lt;&lt;~ERB)
+  &lt;section class="calendar-header"&gt;
+    &lt;div&gt;
+      &lt;h1&gt;&lt;%= @view.capitalize %&gt; calendar&lt;/h1&gt;
+      &lt;p&gt;&lt;%= @range.begin.strftime("%-d %B") %&gt; – &lt;%= @range.end.strftime("%-d %B %Y") %&gt;&lt;/p&gt;
+    &lt;/div&gt;
+    &lt;div class="calendar-controls"&gt;
+      &lt;% previous = @date - (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %&gt;
+      &lt;% following = @date + (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %&gt;
+      &lt;%= link_to "‹", events_path(view: @view, date: previous), aria: { label: "Previous" } %&gt;
+      &lt;%= link_to "Today", events_path(view: @view) %&gt;
+      &lt;%= link_to "›", events_path(view: @view, date: following), aria: { label: "Next" } %&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;div class="view-tabs"&gt;
+    &lt;% %w[day week month].each do |view| %&gt;
+      &lt;%= link_to view.capitalize, events_path(view:, date: @date, member_id: params[:member_id]), class: ("active" if @view == view) %&gt;
+    &lt;% end %&gt;
+  &lt;/div&gt;
+
+  &lt;%= form_with url: events_path, method: :get, class: "filter" do |form| %&gt;
+    &lt;%= form.hidden_field :view, value: @view %&gt;
+    &lt;%= form.hidden_field :date, value: @date %&gt;
+    &lt;%= form.label :member_id, "Show" %&gt;
+    &lt;%= form.select :member_id, @family_members.map { |m| [m.name, m.id] }, { include_blank: "Everyone", selected: params[:member_id] }, onchange: "this.form.requestSubmit()" %&gt;
+  &lt;% end %&gt;
+
+  &lt;section class="calendar-grid &lt;%= @view %&gt;"&gt;
+    &lt;% @range.each do |day| %&gt;
+      &lt;article class="calendar-day &lt;%= "today" if day == Date.current %&gt;"&gt;
+        &lt;h2&gt;&lt;%= day.strftime(@view == "month" ? "%a %-d" : "%A, %-d %B") %&gt;&lt;/h2&gt;
+        &lt;% @events.select { |event| event.starts_at.to_date == day }.each do |event| %&gt;
+          &lt;%= link_to edit_event_path(event), class: "event", style: "--member-color: #{event.family_member.color}" do %&gt;
+            &lt;strong&gt;&lt;%= event.title %&gt;&lt;/strong&gt;
+            &lt;span&gt;&lt;%= event.starts_at.strftime("%H:%M") %&gt;–&lt;%= event.ends_at.strftime("%H:%M") %&gt; · &lt;%= event.family_member.name %&gt;&lt;/span&gt;
+          &lt;% end %&gt;
+        &lt;% end %&gt;
+      &lt;/article&gt;
+    &lt;% end %&gt;
+  &lt;/section&gt;
+ERB
+
+File.write("app/views/events/_form.html.erb", &lt;&lt;~ERB)
+  &lt;%= form_with model: event, class: "form-card" do |form| %&gt;
+    &lt;% if event.errors.any? %&gt;
+      &lt;div class="alert"&gt;&lt;%= event.errors.full_messages.to_sentence %&gt;&lt;/div&gt;
+    &lt;% end %&gt;
+    &lt;%= form.label :title %&gt;
+    &lt;%= form.text_field :title, required: true, autofocus: true %&gt;
+    &lt;%= form.label :family_member_id, "Family member" %&gt;
+    &lt;%= form.collection_select :family_member_id, FamilyMember.order(:name), :id, :name, prompt: "Choose a person", required: true %&gt;
+    &lt;%= form.label :starts_at, "Starts" %&gt;
+    &lt;%= form.datetime_local_field :starts_at, required: true %&gt;
+    &lt;%= form.label :ends_at, "Ends" %&gt;
+    &lt;%= form.datetime_local_field :ends_at, required: true %&gt;
+    &lt;%= form.label :notes %&gt;
+    &lt;%= form.text_area :notes, rows: 4 %&gt;
+    &lt;%= form.submit %&gt;
+  &lt;% end %&gt;
+ERB
+
+File.write("app/views/events/new.html.erb", "&lt;h1&gt;New appointment&lt;/h1&gt;\n&lt;%= render 'form', event: @event %&gt;\n")
+File.write("app/views/events/edit.html.erb", "&lt;h1&gt;Edit appointment&lt;/h1&gt;\n&lt;%= render 'form', event: @event %&gt;\n&lt;%= button_to 'Delete appointment', @event, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Delete this appointment?' } } %&gt;\n")
+
+File.write("app/views/family_members/index.html.erb", &lt;&lt;~ERB)
+  &lt;section class="calendar-header"&gt;
+    &lt;div&gt;&lt;h1&gt;Family members&lt;/h1&gt;&lt;p&gt;Each person has a distinct calendar color.&lt;/p&gt;&lt;/div&gt;
+    &lt;%= link_to "+ Family member", new_family_member_path, class: "button" %&gt;
+  &lt;/section&gt;
+  &lt;section class="member-list"&gt;
+    &lt;% @family_members.each do |member| %&gt;
+      &lt;article&gt;
+        &lt;span class="color-dot" style="background: &lt;%= member.color %&gt;"&gt;&lt;/span&gt;
+        &lt;strong&gt;&lt;%= member.name %&gt;&lt;/strong&gt;
+        &lt;%= link_to "Edit", edit_family_member_path(member) %&gt;
+      &lt;/article&gt;
+    &lt;% end %&gt;
+  &lt;/section&gt;
+ERB
+
+File.write("app/views/family_members/_form.html.erb", &lt;&lt;~ERB)
+  &lt;%= form_with model: family_member, class: "form-card" do |form| %&gt;
+    &lt;% if family_member.errors.any? %&gt;&lt;div class="alert"&gt;&lt;%= family_member.errors.full_messages.to_sentence %&gt;&lt;/div&gt;&lt;% end %&gt;
+    &lt;%= form.label :name %&gt;
+    &lt;%= form.text_field :name, required: true, autofocus: true %&gt;
+    &lt;%= form.label :color %&gt;
+    &lt;%= form.color_field :color, required: true %&gt;
+    &lt;%= form.submit %&gt;
+  &lt;% end %&gt;
+ERB
+
+File.write("app/views/family_members/new.html.erb", "&lt;h1&gt;New family member&lt;/h1&gt;\n&lt;%= render 'form', family_member: @family_member %&gt;\n")
+File.write("app/views/family_members/edit.html.erb", "&lt;h1&gt;Edit family member&lt;/h1&gt;\n&lt;%= render 'form', family_member: @family_member %&gt;\n&lt;%= button_to 'Remove family member', @family_member, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Remove this family member?' } } %&gt;\n")
+
+File.write("app/assets/stylesheets/application.css", &lt;&lt;~CSS)
+  :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f5f7fb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: #1d4ed8; text-decoration: none; }
+  .topbar { min-height: 4.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem clamp(1rem, 4vw, 4rem); background: #172033; color: white; }
+  .topbar a { color: white; margin-left: 1rem; }
+  .brand { font-weight: 800; font-size: 1.2rem; margin-left: 0 !important; }
+  .button, input[type=submit], .danger { display: inline-block; border: 0; border-radius: .45rem; padding: .6rem .85rem; background: #2563eb; color: white !important; font: inherit; cursor: pointer; }
+  .danger { background: #b91c1c; margin-top: 1rem; }
+  .page { max-width: 1400px; margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); }
+  .calendar-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  h1 { margin-bottom: .2rem; } h2 { font-size: .9rem; margin: 0 0 .5rem; } p { color: #5b6475; }
+  .calendar-controls, .view-tabs { display: flex; gap: .5rem; align-items: center; }
+  .calendar-controls a, .view-tabs a { padding: .45rem .7rem; border-radius: .4rem; background: #e7ebf3; color: #172033; }
+  .view-tabs { margin: 1.2rem 0; } .view-tabs .active { color: white; background: #2563eb; }
+  .filter { margin-bottom: 1rem; } select, input, textarea { display: block; width: 100%; padding: .6rem; margin: .3rem 0 1rem; border: 1px solid #c9d1df; border-radius: .4rem; font: inherit; } .filter select { display: inline-block; width: auto; margin-left: .5rem; }
+  .calendar-grid { display: grid; gap: .6rem; } .calendar-grid.month { grid-template-columns: repeat(7, minmax(0, 1fr)); } .calendar-grid.week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .calendar-grid.day { grid-template-columns: minmax(0, 1fr); }
+  .calendar-day { min-height: 10rem; padding: .65rem; background: white; border: 1px solid #e1e6ef; border-radius: .5rem; } .calendar-day.today { outline: 2px solid #2563eb; }
+  .event { display: block; border-left: .35rem solid var(--member-color); margin: .35rem 0; padding: .35rem .45rem; background: #f7f9fc; border-radius: .2rem; color: #172033; font-size: .8rem; } .event span { display: block; color: #5b6475; margin-top: .15rem; }
+  .form-card { max-width: 38rem; padding: 1.25rem; background: white; border-radius: .6rem; box-shadow: 0 1px 3px #17203318; } label { font-weight: 650; } textarea { resize: vertical; }
+  .member-list { display: grid; gap: .6rem; max-width: 38rem; } .member-list article { display: flex; align-items: center; gap: .7rem; padding: 1rem; background: white; border-radius: .5rem; } .member-list a { margin-left: auto; }
+  .color-dot { width: 1rem; height: 1rem; border-radius: 50%; }.notice, .alert { padding: .75rem; border-radius: .4rem; }.notice { background: #dcfce7; color: #166534; }.alert { background: #fee2e2; color: #991b1b; }
+  @media (max-width: 720px) { .topbar, .calendar-header { align-items: flex-start; flex-direction: column; }.topbar nav a { margin-left: .5rem; }.calendar-grid.month, .calendar-grid.week { grid-template-columns: 1fr; }.calendar-day { min-height: auto; }.calendar-day h2 { font-size: 1rem; } }
+CSS
+
+File.write("bin/docker-entrypoint", &lt;&lt;~BASH)
+  #!/bin/bash
+  set -euo pipefail
+
+  if [ "${1:-}" = "./bin/rails" ] &amp;&amp; [ "${2:-}" = "server" ]; then
+    ./bin/rails db:prepare
+    ./bin/rails db:seed
+  fi
+
+  exec "$@"
+BASH
+File.chmod(0o755, "bin/docker-entrypoint")
+RUBY
+
+RUN bundle install &amp;&amp; \
+    SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile &amp;&amp; \
+    rm -rf /usr/local/bundle/cache /root/.bundle/cache
+
+FROM ruby:${RUBY_VERSION}-slim-trixie AS production
+
+ENV RAILS_ENV=production \
+    RACK_ENV=production \
+    BUNDLE_DEPLOYMENT=1 \
+    BUNDLE_WITHOUT="development:test" \
+    BUNDLE_FROZEN=1 \
+    BUNDLE_PATH=/usr/local/bundle \
+    HOME=/rails \
+    LANG=C.UTF-8
+
+WORKDIR /rails
+
+LABEL org.opencontainers.image.title="Family Calendar" \
+      org.opencontainers.image.description="Shared responsive Rails calendar for a family" \
+      org.opencontainers.image.source="local"
+
+# Runtime contains only TLS certificates and SQLite's shared library.
+RUN apt-get update -qq &amp;&amp; \
+    apt-get install --no-install-recommends -y ca-certificates libsqlite3-0 &amp;&amp; \
+    rm -rf /var/lib/apt/lists/* &amp;&amp; \
+    groupadd --system --gid 1000 rails &amp;&amp; \
+    useradd --system --uid 1000 --gid rails \
+      --no-create-home --shell /usr/sbin/nologin rails
+
+COPY --from=build /usr/local/bundle /usr/local/bundle
+COPY --from=build /rails /rails
+
+# Immutable code and gems. SQLite data lives in the explicitly writable
+# storage volume; tmp and log remain writable for Rails at runtime.
+RUN chmod -R go-w /rails /usr/local/bundle &amp;&amp; \
+    mkdir -p tmp/pids tmp/cache tmp/sockets log storage &amp;&amp; \
+    chown -R 1000:1000 tmp log storage &amp;&amp; \
+    chmod -R u=rwX,g=rX,o= tmp log storage
+
+USER 1000:1000
+
+VOLUME ["/rails/storage"]
+
+EXPOSE 3009
+
+# Bind Rails to every IPv6 interface. IPv6 routing still needs to be enabled
+# in Docker/Podman and the hosting network.
+#
+# Harden deployment further at runtime:
+# podman run --read-only --tmpfs /tmp --cap-drop=ALL --security-opt no-new-privileges ...
+ENTRYPOINT ["./bin/docker-entrypoint"]
+CMD ["./bin/rails", "server", "-b", "::", "-p", "3009"]
