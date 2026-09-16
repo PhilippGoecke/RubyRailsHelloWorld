@@ -1,0 +1,318 @@
+# syntax=docker/dockerfile:1.4
+FROM ruby:3.3-slim
+
+ENV RAILS_ENV=production \
+    RAILS_LOG_TO_STDOUT=true \
+    RAILS_SERVE_STATIC_FILES=true \
+    SECRET_KEY_BASE=replace-this-before-internet-deployment
+
+WORKDIR /rails
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential libsqlite3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN <<'EOF' cat > Gemfile
+source "https://rubygems.org"
+gem "rails", "~> 7.1.3"
+gem "sqlite3", "~> 1.4"
+gem "puma", ">= 5.0"
+EOF
+
+RUN bundle install
+
+RUN mkdir -p app/controllers app/models app/views/calendar app/views/entries app/views/layouts config/environments db/migrate storage tmp/pids
+
+RUN <<'EOF' cat > config/boot.rb
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+require "bundler/setup"
+EOF
+
+RUN <<'EOF' cat > config/application.rb
+require_relative "boot"
+require "rails/all"
+Bundler.require(*Rails.groups)
+
+module FamilyCalendar
+  class Application < Rails::Application
+    config.load_defaults 7.1
+    config.time_zone = "UTC"
+  end
+end
+EOF
+
+RUN <<'EOF' cat > config/environment.rb
+require_relative "application"
+Rails.application.initialize!
+EOF
+
+RUN <<'EOF' cat > Rakefile
+require_relative "config/application"
+Rails.application.load_tasks
+EOF
+
+RUN <<'EOF' cat > config.ru
+require_relative "config/environment"
+run Rails.application
+EOF
+
+RUN <<'EOF' cat > config/database.yml
+production:
+  adapter: sqlite3
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  timeout: 5000
+  database: storage/production.sqlite3
+EOF
+
+RUN <<'EOF' cat > config/puma.rb
+threads_count = ENV.fetch("RAILS_MAX_THREADS", 5)
+threads threads_count, threads_count
+port ENV.fetch("PORT", 3000)
+environment ENV.fetch("RAILS_ENV", "production")
+pidfile "tmp/pids/server.pid"
+EOF
+
+RUN <<'EOF' cat > config/environments/production.rb
+Rails.application.configure do
+  config.eager_load = true
+  config.consider_all_requests_local = false
+  config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?
+  config.log_level = :info
+  config.logger = ActiveSupport::Logger.new($stdout)
+  config.force_ssl = false
+end
+EOF
+
+RUN <<'EOF' cat > config/routes.rb
+Rails.application.routes.draw do
+  root "calendar#index"
+  get "calendar", to: "calendar#index"
+  get "calendar.ics", to: "calendar_subscriptions#show", as: :calendar_subscription
+  resources :entries
+end
+EOF
+
+RUN <<'EOF' cat > app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+end
+EOF
+
+RUN <<'EOF' cat > app/models/calendar_entry.rb
+class CalendarEntry < ApplicationRecord
+  COLORS = {
+    "Alex" => "#EF476F",
+    "Jamie" => "#118AB2",
+    "Sam" => "#06D6A0",
+    "Taylor" => "#FFD166"
+  }.freeze
+
+  validates :title, :family_member, :starts_at, :ends_at, presence: true
+  validate :ends_after_starts
+
+  def color
+    COLORS.fetch(family_member, "#7C6CF2")
+  end
+
+  private
+
+  def ends_after_starts
+    return if starts_at.blank? || ends_at.blank? || ends_at > starts_at
+
+    errors.add(:ends_at, "must be after the start time")
+  end
+end
+EOF
+
+RUN <<'EOF' cat > app/controllers/calendar_controller.rb
+class CalendarController < ApplicationController
+  def index
+    @view = %w[day week month].include?(params[:view]) ? params[:view] : "month"
+    @date = Date.parse(params.fetch(:date, Date.current.to_s))
+    @range = case @view
+             when "day" then @date.all_day
+             when "week" then @date.beginning_of_week..@date.end_of_week.end_of_day
+             else @date.beginning_of_month.beginning_of_week..@date.end_of_month.end_of_week.end_of_day
+             end
+    @entries_by_day = CalendarEntry.where(starts_at: @range).order(:starts_at).group_by { |entry| entry.starts_at.to_date }
+  rescue Date::Error
+    redirect_to calendar_path(view: @view)
+  end
+end
+EOF
+
+RUN <<'EOF' cat > app/controllers/entries_controller.rb
+class EntriesController < ApplicationController
+  before_action :set_entry, only: %i[show edit update destroy]
+
+  def show; end
+
+  def new
+    @entry = CalendarEntry.new(starts_at: Time.current.change(min: 0), ends_at: 1.hour.from_now.change(min: 0))
+  end
+
+  def edit; end
+
+  def create
+    @entry = CalendarEntry.new(entry_params)
+    @entry.save ? redirect_to(@entry) : render(:new, status: :unprocessable_entity)
+  end
+
+  def update
+    @entry.update(entry_params) ? redirect_to(@entry) : render(:edit, status: :unprocessable_entity)
+  end
+
+  def destroy
+    @entry.destroy!
+    redirect_to calendar_path
+  end
+
+  private
+
+  def set_entry
+    @entry = CalendarEntry.find(params[:id])
+  end
+
+  def entry_params
+    params.require(:calendar_entry).permit(:title, :family_member, :starts_at, :ends_at, :notes)
+  end
+end
+EOF
+
+RUN <<'EOF' cat > app/controllers/calendar_subscriptions_controller.rb
+class CalendarSubscriptionsController < ApplicationController
+  def show
+    entries = CalendarEntry.order(:starts_at)
+    render plain: feed(entries), content_type: "text/calendar; charset=utf-8"
+  end
+
+  private
+
+  def feed(entries)
+    (["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Family Calendar//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Family Calendar"] + entries.flat_map { |entry| event(entry) } + ["END:VCALENDAR"]).join("\r\n") + "\r\n"
+  end
+
+  def event(entry)
+    ["BEGIN:VEVENT", "UID:family-calendar-entry-#{entry.id}@#{request.host}", "DTSTAMP:#{stamp(entry.updated_at)}", "DTSTART:#{stamp(entry.starts_at)}", "DTEND:#{stamp(entry.ends_at)}", "SUMMARY:#{escape("#{entry.family_member}: #{entry.title}")}", "DESCRIPTION:#{escape(entry.notes)}", "CATEGORIES:#{escape(entry.family_member)}", "LAST-MODIFIED:#{stamp(entry.updated_at)}", "END:VEVENT"]
+  end
+
+  def stamp(time)
+    time.utc.strftime("%Y%m%dT%H%M%SZ")
+  end
+
+  def escape(value)
+    value.to_s.gsub("\\", "\\\\").gsub(";", "\\;").gsub(",", "\\,").gsub(/\r?\n/, "\\n")
+  end
+end
+EOF
+
+RUN <<'EOF' cat > db/migrate/20260916000000_create_calendar_entries.rb
+class CreateCalendarEntries < ActiveRecord::Migration[7.1]
+  def change
+    create_table :calendar_entries do |t|
+      t.string :title, null: false
+      t.string :family_member, null: false
+      t.datetime :starts_at, null: false
+      t.datetime :ends_at, null: false
+      t.text :notes
+      t.timestamps
+    end
+    add_index :calendar_entries, :starts_at
+  end
+end
+EOF
+
+RUN <<'EOF' cat > app/views/layouts/application.html.erb
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Family Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <%= csrf_meta_tags %>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f5f7fb;color:#1f2937;font-family:system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:32px 20px}a{color:inherit;text-decoration:none}.top,.tools,.subscribe{display:flex;align-items:center;justify-content:space-between;gap:16px}.top{margin-bottom:22px}h1,h2{margin:0}.button,button{background:#4f46e5;border:0;border-radius:8px;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}.subscribe{background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:16px;padding:14px}.subscribe p{margin:5px 0;color:#4b5563;font-size:.85rem}.subscribe code{background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:8px;overflow-wrap:anywhere}.tools{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px}.tabs{display:flex;gap:4px}.tabs a,.nav a{padding:8px 10px;border-radius:6px}.tabs .active{background:#e0e7ff;color:#3730a3;font-weight:700}.nav{display:flex;align-items:center;gap:10px}.legend{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0;font-size:.85rem}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.month{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:#e5e7eb}.weekday,.day{background:#fff;padding:9px}.weekday{font-size:.75rem;font-weight:700;color:#6b7280}.day{min-height:120px}.muted{background:#fafafa}.chip,.agenda-entry{display:block;border-left:4px solid var(--color);background:#fff;margin:4px 0;padding:5px;font-size:.78rem}.chip b{color:var(--color)}.agenda{display:grid;gap:12px}.week{grid-template-columns:repeat(7,1fr)}.agenda-day{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:220px;padding:12px}.agenda-day header{font-weight:700}.agenda-entry{margin-top:9px}.agenda-entry span,.agenda-entry small{display:block;color:#6b7280;font-size:.75rem}.form{display:grid;gap:8px;max-width:520px}.form input,.form select,.form textarea{padding:8px;border:1px solid #d1d5db;border-radius:6px;font:inherit}@media(max-width:760px){.top,.tools,.subscribe{align-items:stretch;flex-direction:column}.week{grid-template-columns:1fr}.month{overflow-x:auto;grid-template-columns:repeat(7,minmax(120px,1fr))}}
+  </style>
+</head>
+<body><main><%= yield %></main></body>
+</html>
+EOF
+
+RUN <<'EOF' cat > app/views/calendar/index.html.erb
+<header class="top">
+  <div><p>Shared schedule</p><h1>Family Calendar</h1></div>
+  <%= link_to "Add entry", new_entry_path, class: "button" %>
+</header>
+<section class="subscribe">
+  <div><h2>Subscribe in your calendar app</h2><p>Add this internet-calendar address in iPhone, Android, Outlook, Google Calendar, or another iCalendar-compatible app.</p></div>
+  <code><%= calendar_subscription_url(protocol: request.protocol) %></code>
+</section>
+<section class="tools">
+  <nav class="tabs"><% %w[day week month].each do |name| %><%= link_to name.capitalize, calendar_path(view: name, date: @date), class: ("active" if @view == name) %><% end %></nav>
+  <div class="nav">
+    <% unit = @view == "month" ? "month" : @view == "week" ? "week" : "day" %>
+    <%= link_to "‹", calendar_path(view: @view, date: @date.public_send("prev_#{unit}")) %>
+    <strong><%= @view == "month" ? @date.strftime("%B %Y") : @view == "week" ? "Week of #{@range.begin.strftime("%b %-d")}" : @date.strftime("%A, %B %-d") %></strong>
+    <%= link_to "›", calendar_path(view: @view, date: @date.public_send("next_#{unit}")) %>
+  </div>
+</section>
+<section class="legend"><% CalendarEntry::COLORS.each do |member, color| %><span><i class="dot" style="background:<%= color %>"></i><%= member %></span><% end %></section>
+<% days = (@range.begin.to_date..@range.end.to_date).to_a %>
+<% if @view == "month" %>
+  <section class="month">
+    <% %w[Mon Tue Wed Thu Fri Sat Sun].each do |name| %><div class="weekday"><%= name %></div><% end %>
+    <% days.each do |day| %>
+      <article class="day <%= "muted" unless day.month == @date.month %>">
+        <%= link_to day.day, calendar_path(view: "day", date: day) %>
+        <% (@entries_by_day[day] || []).each do |entry| %><%= link_to entry_path(entry), class: "chip", style: "--color: #{entry.color}" do %><b><%= entry.family_member %></b> <%= entry.title %><% end %><% end %>
+      </article>
+    <% end %>
+  </section>
+<% else %>
+  <section class="agenda <%= "week" if @view == "week" %>">
+    <% days.each do |day| %>
+      <article class="agenda-day"><header><%= day.strftime("%A, %-d %b") %></header>
+        <% (@entries_by_day[day] || []).each do |entry| %><%= link_to entry_path(entry), class: "agenda-entry", style: "--color: #{entry.color}" do %><span><%= entry.starts_at.strftime("%l:%M %p") %> – <%= entry.ends_at.strftime("%l:%M %p") %></span><b><%= entry.title %></b><small><%= entry.family_member %></small><% end %><% end %>
+      </article>
+    <% end %>
+  </section>
+<% end %>
+EOF
+
+RUN <<'EOF' cat > app/views/entries/_form.html.erb
+<%= form_with model: entry, class: "form" do |form| %>
+  <% if entry.errors.any? %><p><%= entry.errors.full_messages.to_sentence %></p><% end %>
+  <%= form.label :title %><%= form.text_field :title, required: true %>
+  <%= form.label :family_member %><%= form.select :family_member, CalendarEntry::COLORS.keys, required: true %>
+  <%= form.label :starts_at %><%= form.datetime_local_field :starts_at, required: true %>
+  <%= form.label :ends_at %><%= form.datetime_local_field :ends_at, required: true %>
+  <%= form.label :notes %><%= form.text_area :notes %>
+  <%= form.submit %>
+<% end %>
+EOF
+
+RUN <<'EOF' cat > app/views/entries/new.html.erb
+<h1>New calendar entry</h1>
+<%= render "form", entry: @entry %>
+<p><%= link_to "Back to calendar", calendar_path %></p>
+EOF
+
+RUN <<'EOF' cat > app/views/entries/edit.html.erb
+<h1>Edit calendar entry</h1>
+<%= render "form", entry: @entry %>
+<p><%= link_to "Back to entry", @entry %></p>
+EOF
+
+RUN <<'EOF' cat > app/views/entries/show.html.erb
+<h1><%= @entry.title %></h1>
+<p><strong><%= @entry.family_member %></strong></p>
+<p><%= @entry.starts_at.strftime("%A, %B %-d, %Y · %l:%M %p") %> – <%= @entry.ends_at.strftime("%l:%M %p") %></p>
+<p><%= @entry.notes %></p>
+<%= link_to "Edit", edit_entry_path(@entry), class: "button" %>
+<%= button_to "Delete", @entry, method: :delete %>
+<p><%= link_to "Back to calendar", calendar_path(date: @entry.starts_at.to_date) %></p>
+EOF
+
+VOLUME ["/rails/storage"]
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "bundle exec rails db:prepare && exec bundle exec rails server -b 0.0.0.0"]
