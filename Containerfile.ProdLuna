@@ -11,9 +11,13 @@ ENV RAILS_ENV=production \
     BUNDLE_PATH=/usr/local/bundle \
     BUNDLE_WITHOUT="development:test" \
     BUNDLE_FROZEN=1 \
-    LANG=C.UTF-8
+    LANG=C.UTF-8 \
+    HOME=/rails
 
 WORKDIR /rails
+
+LABEL org.opencontainers.image.title="Rails application" \
+      org.opencontainers.image.description="Production Rails application image"
 
 FROM base AS build
 
@@ -36,31 +40,33 @@ RUN bundle install && \
 # Copy the complete Rails application and produce production assets.
 COPY . .
 RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && \
-    bundle exec bootsnap precompile --gemfile app/ lib/ 2>/dev/null || true
+    if bundle info bootsnap >/dev/null 2>&1; then \
+      bundle exec bootsnap precompile --gemfile app/ lib/; \
+    fi
 
 FROM base AS production
 
-# Runtime-only libraries. Add application-specific packages here if a gem needs them.
+# Runtime-only library for PostgreSQL. Development and build dependencies
+# remain isolated in the build stage.
 RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y \
       ca-certificates \
-      curl \
-      libjemalloc2 \
       libpq5 && \
     rm -rf /var/lib/apt/lists/* && \
     groupadd --system --gid 1000 rails && \
-    useradd --system --uid 1000 --gid rails --create-home --shell /bin/bash rails
+    useradd --system --uid 1000 --gid rails \
+      --no-create-home --shell /usr/sbin/nologin rails
 
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-
+# Application and gems are root-owned and read-only. Only Rails' runtime
+# directories are writable by the unprivileged process.
 COPY --from=build /usr/local/bundle /usr/local/bundle
-COPY --from=build --chown=rails:rails /rails /rails
+COPY --from=build /rails /rails
+RUN chmod -R go-w /rails /usr/local/bundle && \
+    mkdir -p tmp/pids tmp/cache tmp/sockets log storage && \
+    chown -R 1000:1000 tmp log storage && \
+    chmod -R u=rwX,g=rX,o= tmp log storage
 
-# Rails needs these directories to remain writable at runtime.
-RUN mkdir -p tmp/pids tmp/cache tmp/sockets log storage && \
-    chown -R rails:rails tmp log storage
-
-USER rails
+USER 1000:1000
 
 EXPOSE 3000
 
@@ -73,5 +79,9 @@ EXPOSE 3000
 #
 # Docker sends signals directly to the Rails server. Bind to all IPv6 interfaces.
 # Enable IPv6 networking in the Docker daemon/orchestrator to publish IPv6 traffic.
+#
+# Deploy with a read-only root filesystem and runtime restrictions, for example:
+# docker run --read-only --tmpfs /tmp --cap-drop=ALL --security-opt no-new-privileges \
+#   --publish "[::]:3000:3000" your-image
 ENTRYPOINT ["./bin/docker-entrypoint"]
 CMD ["./bin/rails", "server", "-b", "::", "-p", "3000"]
