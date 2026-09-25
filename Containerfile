@@ -48,7 +48,7 @@ WORKDIR /rails/demo
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
-  && bundle add rails --version "~> 8.1.3.1" \
+  && bundle add rails --version "~> 8.1.4" \
   && bundle update --bundler \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
   && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
