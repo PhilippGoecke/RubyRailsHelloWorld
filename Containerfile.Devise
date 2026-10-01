@@ -9,8 +9,9 @@ RUN bundle add devise \
   && RAILS_ENV=production bundle exec rails db:migrate
 # OTP
 RUN bundle add devise-otp \
-  && bundle exec rails g devise_otp:install \
-  && bundle exec rails g devise_otp Account \
+  && bundle exec rails generate devise_otp:install \
+  && bundle exec rails generate devise_otp Account \
+  && sed -i '/class Account < ApplicationRecord/a\  devise :otp_authenticatable' app/models/account.rb \
   && RAILS_ENV=production bundle exec rails db:migrate
 # Bootstrap
 RUN mkdir app/views/application/
