@@ -48,7 +48,7 @@ WORKDIR /rails/tinc-vpns
 
 # install Rails and initialize a new Rails app
 RUN bundle init \
-  && bundle add rails --version "~> 8.1.3.1" \
+  && bundle add rails --version "~> 8.1.4" \
   && bundle update --bundler \
   && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --asset-pipeline=propshaft \
   && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> <%= Bundler::VERSION %> -->/g' app/views/layouts/application.html.erb
