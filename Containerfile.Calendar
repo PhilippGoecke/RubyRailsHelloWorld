@@ -21,14 +21,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 WORKDIR /rails
 
 # Only build dependencies exist in this stage.
-RUN apt-get update -qq &amp;&amp; \
-    apt-get install --no-install-recommends -y \
+RUN apt update -qq && \
+    apt install --no-install-recommends -y \
       build-essential \
       libsqlite3-dev \
-      pkg-config &amp;&amp; \
+      pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
-RUN gem install --no-document rails:${RAILS_VERSION} &amp;&amp; \
+RUN gem install --no-document rails:${RAILS_VERSION} && \
     rails new . \
       --database=sqlite3 \
       --skip-git \
@@ -41,9 +41,9 @@ RUN gem install --no-document rails:${RAILS_VERSION} &amp;&amp; \
 # Add the calendar's persistence model, database schema, controllers, routes,
 # responsive views, and startup script without requiring source files outside
 # this Containerfile.
-RUN ruby &lt;&lt;'RUBY'
-File.write("app/models/family_member.rb", &lt;&lt;~RUBY)
-  class FamilyMember &lt; ApplicationRecord
+RUN ruby <<'RUBY'
+File.write("app/models/family_member.rb", <<~RUBY)
+  class FamilyMember < ApplicationRecord
     has_many :events, dependent: :restrict_with_error
 
     validates :name, presence: true, length: { maximum: 50 }
@@ -51,8 +51,8 @@ File.write("app/models/family_member.rb", &lt;&lt;~RUBY)
   end
 RUBY
 
-File.write("app/models/event.rb", &lt;&lt;~RUBY)
-  class Event &lt; ApplicationRecord
+File.write("app/models/event.rb", <<~RUBY)
+  class Event < ApplicationRecord
     belongs_to :family_member
 
     validates :title, presence: true, length: { maximum: 120 }
@@ -62,15 +62,15 @@ File.write("app/models/event.rb", &lt;&lt;~RUBY)
     private
 
     def ends_after_start
-      return if starts_at.blank? || ends_at.blank? || ends_at &gt; starts_at
+      return if starts_at.blank? || ends_at.blank? || ends_at > starts_at
 
       errors.add(:ends_at, "must be after the start time")
     end
   end
 RUBY
 
-File.write("db/migrate/20260916100000_create_family_calendar.rb", &lt;&lt;~RUBY)
-  class CreateFamilyCalendar &lt; ActiveRecord::Migration[8.1]
+File.write("db/migrate/20260916100000_create_family_calendar.rb", <<~RUBY)
+  class CreateFamilyCalendar < ActiveRecord::Migration[8.1]
     def change
       create_table :family_members do |t|
         t.string :name, null: false
@@ -93,8 +93,8 @@ File.write("db/migrate/20260916100000_create_family_calendar.rb", &lt;&lt;~RUBY)
   end
 RUBY
 
-File.write("app/controllers/events_controller.rb", &lt;&lt;~RUBY)
-  class EventsController &lt; ApplicationController
+File.write("app/controllers/events_controller.rb", <<~RUBY)
+  class EventsController < ApplicationController
     before_action :set_event, only: %i[edit update destroy]
 
     def index
@@ -158,8 +158,8 @@ File.write("app/controllers/events_controller.rb", &lt;&lt;~RUBY)
   end
 RUBY
 
-File.write("app/controllers/family_members_controller.rb", &lt;&lt;~RUBY)
-  class FamilyMembersController &lt; ApplicationController
+File.write("app/controllers/family_members_controller.rb", <<~RUBY)
+  class FamilyMembersController < ApplicationController
     before_action :set_family_member, only: %i[edit update destroy]
 
     def index
@@ -206,35 +206,35 @@ File.write("app/controllers/family_members_controller.rb", &lt;&lt;~RUBY)
   end
 RUBY
 
-File.write("config/routes.rb", &lt;&lt;~RUBY)
+File.write("config/routes.rb", <<~RUBY)
   Rails.application.routes.draw do
     root "events#index"
     resources :events, except: :show
     resources :family_members, except: :show
-    get "up" =&gt; "rails/health#show", as: :rails_health_check
+    get "up" => "rails/health#show", as: :rails_health_check
   end
 RUBY
 
-File.write("config/database.yml", &lt;&lt;~YAML)
+File.write("config/database.yml", <<~YAML)
   default: &amp;default
     adapter: sqlite3
-    pool: &lt;%= ENV.fetch("RAILS_MAX_THREADS", 5) %&gt;
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
     timeout: 5000
 
   development:
-    &lt;&lt;: *default
+    <<: *default
     database: storage/development.sqlite3
 
   test:
-    &lt;&lt;: *default
+    <<: *default
     database: storage/test.sqlite3
 
   production:
-    &lt;&lt;: *default
-    database: &lt;%= ENV.fetch("SQLITE_DATABASE", Rails.root.join("storage", "production.sqlite3")) %&gt;
+    <<: *default
+    database: <%= ENV.fetch("SQLITE_DATABASE", Rails.root.join("storage", "production.sqlite3")) %>
 YAML
 
-File.write("db/seeds.rb", &lt;&lt;~RUBY)
+File.write("db/seeds.rb", <<~RUBY)
   [
     ["Alex", "#2563eb"],
     ["Sam", "#db2777"],
@@ -244,130 +244,130 @@ File.write("db/seeds.rb", &lt;&lt;~RUBY)
   end
 RUBY
 
-File.write("app/views/layouts/application.html.erb", &lt;&lt;~ERB)
-  &lt;!DOCTYPE html&gt;
-  &lt;html lang="en"&gt;
-    &lt;head&gt;
-      &lt;title&gt;Family Calendar&lt;/title&gt;
-      &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
-      &lt;%= csrf_meta_tags %&gt;
-      &lt;%= csp_meta_tag %&gt;
-      &lt;%= stylesheet_link_tag "application", "data-turbo-track": "reload" %&gt;
-    &lt;/head&gt;
-    &lt;body&gt;
-      &lt;header class="topbar"&gt;
-        &lt;%= link_to "Family Calendar", root_path, class: "brand" %&gt;
-        &lt;nav&gt;
-          &lt;%= link_to "Calendar", root_path %&gt;
-          &lt;%= link_to "Family", family_members_path %&gt;
-          &lt;%= link_to "+ Appointment", new_event_path, class: "button" %&gt;
-        &lt;/nav&gt;
-      &lt;/header&gt;
-      &lt;main class="page"&gt;
-        &lt;% if notice %&gt;&lt;p class="notice"&gt;&lt;%= notice %&gt;&lt;/p&gt;&lt;% end %&gt;
-        &lt;% if alert %&gt;&lt;p class="alert"&gt;&lt;%= alert %&gt;&lt;/p&gt;&lt;% end %&gt;
-        &lt;%= yield %&gt;
-      &lt;/main&gt;
-    &lt;/body&gt;
-  &lt;/html&gt;
+File.write("app/views/layouts/application.html.erb", <<~ERB)
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <title>Family Calendar</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <%= csrf_meta_tags %>
+      <%= csp_meta_tag %>
+      <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    </head>
+    <body>
+      <header class="topbar">
+        <%= link_to "Family Calendar", root_path, class: "brand" %>
+        <nav>
+          <%= link_to "Calendar", root_path %>
+          <%= link_to "Family", family_members_path %>
+          <%= link_to "+ Appointment", new_event_path, class: "button" %>
+        </nav>
+      </header>
+      <main class="page">
+        <% if notice %><p class="notice"><%= notice %></p><% end %>
+        <% if alert %><p class="alert"><%= alert %></p><% end %>
+        <%= yield %>
+      </main>
+    </body>
+  </html>
 ERB
 
-File.write("app/views/events/index.html.erb", &lt;&lt;~ERB)
-  &lt;section class="calendar-header"&gt;
-    &lt;div&gt;
-      &lt;h1&gt;&lt;%= @view.capitalize %&gt; calendar&lt;/h1&gt;
-      &lt;p&gt;&lt;%= @range.begin.strftime("%-d %B") %&gt; – &lt;%= @range.end.strftime("%-d %B %Y") %&gt;&lt;/p&gt;
-    &lt;/div&gt;
-    &lt;div class="calendar-controls"&gt;
-      &lt;% previous = @date - (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %&gt;
-      &lt;% following = @date + (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %&gt;
-      &lt;%= link_to "‹", events_path(view: @view, date: previous), aria: { label: "Previous" } %&gt;
-      &lt;%= link_to "Today", events_path(view: @view) %&gt;
-      &lt;%= link_to "›", events_path(view: @view, date: following), aria: { label: "Next" } %&gt;
-    &lt;/div&gt;
-  &lt;/section&gt;
+File.write("app/views/events/index.html.erb", <<~ERB)
+  <section class="calendar-header">
+    <div>
+      <h1><%= @view.capitalize %> calendar</h1>
+      <p><%= @range.begin.strftime("%-d %B") %> – <%= @range.end.strftime("%-d %B %Y") %></p>
+    </div>
+    <div class="calendar-controls">
+      <% previous = @date - (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %>
+      <% following = @date + (@view == "month" ? 1.month : @view == "week" ? 1.week : 1.day) %>
+      <%= link_to "‹", events_path(view: @view, date: previous), aria: { label: "Previous" } %>
+      <%= link_to "Today", events_path(view: @view) %>
+      <%= link_to "›", events_path(view: @view, date: following), aria: { label: "Next" } %>
+    </div>
+  </section>
 
-  &lt;div class="view-tabs"&gt;
-    &lt;% %w[day week month].each do |view| %&gt;
-      &lt;%= link_to view.capitalize, events_path(view:, date: @date, member_id: params[:member_id]), class: ("active" if @view == view) %&gt;
-    &lt;% end %&gt;
-  &lt;/div&gt;
+  <div class="view-tabs">
+    <% %w[day week month].each do |view| %>
+      <%= link_to view.capitalize, events_path(view:, date: @date, member_id: params[:member_id]), class: ("active" if @view == view) %>
+    <% end %>
+  </div>
 
-  &lt;%= form_with url: events_path, method: :get, class: "filter" do |form| %&gt;
-    &lt;%= form.hidden_field :view, value: @view %&gt;
-    &lt;%= form.hidden_field :date, value: @date %&gt;
-    &lt;%= form.label :member_id, "Show" %&gt;
-    &lt;%= form.select :member_id, @family_members.map { |m| [m.name, m.id] }, { include_blank: "Everyone", selected: params[:member_id] }, onchange: "this.form.requestSubmit()" %&gt;
-  &lt;% end %&gt;
+  <%= form_with url: events_path, method: :get, class: "filter" do |form| %>
+    <%= form.hidden_field :view, value: @view %>
+    <%= form.hidden_field :date, value: @date %>
+    <%= form.label :member_id, "Show" %>
+    <%= form.select :member_id, @family_members.map { |m| [m.name, m.id] }, { include_blank: "Everyone", selected: params[:member_id] }, onchange: "this.form.requestSubmit()" %>
+  <% end %>
 
-  &lt;section class="calendar-grid &lt;%= @view %&gt;"&gt;
-    &lt;% @range.each do |day| %&gt;
-      &lt;article class="calendar-day &lt;%= "today" if day == Date.current %&gt;"&gt;
-        &lt;h2&gt;&lt;%= day.strftime(@view == "month" ? "%a %-d" : "%A, %-d %B") %&gt;&lt;/h2&gt;
-        &lt;% @events.select { |event| event.starts_at.to_date == day }.each do |event| %&gt;
-          &lt;%= link_to edit_event_path(event), class: "event", style: "--member-color: #{event.family_member.color}" do %&gt;
-            &lt;strong&gt;&lt;%= event.title %&gt;&lt;/strong&gt;
-            &lt;span&gt;&lt;%= event.starts_at.strftime("%H:%M") %&gt;–&lt;%= event.ends_at.strftime("%H:%M") %&gt; · &lt;%= event.family_member.name %&gt;&lt;/span&gt;
-          &lt;% end %&gt;
-        &lt;% end %&gt;
-      &lt;/article&gt;
-    &lt;% end %&gt;
-  &lt;/section&gt;
+  <section class="calendar-grid <%= @view %>">
+    <% @range.each do |day| %>
+      <article class="calendar-day <%= "today" if day == Date.current %>">
+        <h2><%= day.strftime(@view == "month" ? "%a %-d" : "%A, %-d %B") %></h2>
+        <% @events.select { |event| event.starts_at.to_date == day }.each do |event| %>
+          <%= link_to edit_event_path(event), class: "event", style: "--member-color: #{event.family_member.color}" do %>
+            <strong><%= event.title %></strong>
+            <span><%= event.starts_at.strftime("%H:%M") %>–<%= event.ends_at.strftime("%H:%M") %> · <%= event.family_member.name %></span>
+          <% end %>
+        <% end %>
+      </article>
+    <% end %>
+  </section>
 ERB
 
-File.write("app/views/events/_form.html.erb", &lt;&lt;~ERB)
-  &lt;%= form_with model: event, class: "form-card" do |form| %&gt;
-    &lt;% if event.errors.any? %&gt;
-      &lt;div class="alert"&gt;&lt;%= event.errors.full_messages.to_sentence %&gt;&lt;/div&gt;
-    &lt;% end %&gt;
-    &lt;%= form.label :title %&gt;
-    &lt;%= form.text_field :title, required: true, autofocus: true %&gt;
-    &lt;%= form.label :family_member_id, "Family member" %&gt;
-    &lt;%= form.collection_select :family_member_id, FamilyMember.order(:name), :id, :name, prompt: "Choose a person", required: true %&gt;
-    &lt;%= form.label :starts_at, "Starts" %&gt;
-    &lt;%= form.datetime_local_field :starts_at, required: true %&gt;
-    &lt;%= form.label :ends_at, "Ends" %&gt;
-    &lt;%= form.datetime_local_field :ends_at, required: true %&gt;
-    &lt;%= form.label :notes %&gt;
-    &lt;%= form.text_area :notes, rows: 4 %&gt;
-    &lt;%= form.submit %&gt;
-  &lt;% end %&gt;
+File.write("app/views/events/_form.html.erb", <<~ERB)
+  <%= form_with model: event, class: "form-card" do |form| %>
+    <% if event.errors.any? %>
+      <div class="alert"><%= event.errors.full_messages.to_sentence %></div>
+    <% end %>
+    <%= form.label :title %>
+    <%= form.text_field :title, required: true, autofocus: true %>
+    <%= form.label :family_member_id, "Family member" %>
+    <%= form.collection_select :family_member_id, FamilyMember.order(:name), :id, :name, prompt: "Choose a person", required: true %>
+    <%= form.label :starts_at, "Starts" %>
+    <%= form.datetime_local_field :starts_at, required: true %>
+    <%= form.label :ends_at, "Ends" %>
+    <%= form.datetime_local_field :ends_at, required: true %>
+    <%= form.label :notes %>
+    <%= form.text_area :notes, rows: 4 %>
+    <%= form.submit %>
+  <% end %>
 ERB
 
-File.write("app/views/events/new.html.erb", "&lt;h1&gt;New appointment&lt;/h1&gt;\n&lt;%= render 'form', event: @event %&gt;\n")
-File.write("app/views/events/edit.html.erb", "&lt;h1&gt;Edit appointment&lt;/h1&gt;\n&lt;%= render 'form', event: @event %&gt;\n&lt;%= button_to 'Delete appointment', @event, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Delete this appointment?' } } %&gt;\n")
+File.write("app/views/events/new.html.erb", "<h1>New appointment</h1>\n<%= render 'form', event: @event %>\n")
+File.write("app/views/events/edit.html.erb", "<h1>Edit appointment</h1>\n<%= render 'form', event: @event %>\n<%= button_to 'Delete appointment', @event, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Delete this appointment?' } } %>\n")
 
-File.write("app/views/family_members/index.html.erb", &lt;&lt;~ERB)
-  &lt;section class="calendar-header"&gt;
-    &lt;div&gt;&lt;h1&gt;Family members&lt;/h1&gt;&lt;p&gt;Each person has a distinct calendar color.&lt;/p&gt;&lt;/div&gt;
-    &lt;%= link_to "+ Family member", new_family_member_path, class: "button" %&gt;
-  &lt;/section&gt;
-  &lt;section class="member-list"&gt;
-    &lt;% @family_members.each do |member| %&gt;
-      &lt;article&gt;
-        &lt;span class="color-dot" style="background: &lt;%= member.color %&gt;"&gt;&lt;/span&gt;
-        &lt;strong&gt;&lt;%= member.name %&gt;&lt;/strong&gt;
-        &lt;%= link_to "Edit", edit_family_member_path(member) %&gt;
-      &lt;/article&gt;
-    &lt;% end %&gt;
-  &lt;/section&gt;
+File.write("app/views/family_members/index.html.erb", <<~ERB)
+  <section class="calendar-header">
+    <div><h1>Family members</h1><p>Each person has a distinct calendar color.</p></div>
+    <%= link_to "+ Family member", new_family_member_path, class: "button" %>
+  </section>
+  <section class="member-list">
+    <% @family_members.each do |member| %>
+      <article>
+        <span class="color-dot" style="background: <%= member.color %>"></span>
+        <strong><%= member.name %></strong>
+        <%= link_to "Edit", edit_family_member_path(member) %>
+      </article>
+    <% end %>
+  </section>
 ERB
 
-File.write("app/views/family_members/_form.html.erb", &lt;&lt;~ERB)
-  &lt;%= form_with model: family_member, class: "form-card" do |form| %&gt;
-    &lt;% if family_member.errors.any? %&gt;&lt;div class="alert"&gt;&lt;%= family_member.errors.full_messages.to_sentence %&gt;&lt;/div&gt;&lt;% end %&gt;
-    &lt;%= form.label :name %&gt;
-    &lt;%= form.text_field :name, required: true, autofocus: true %&gt;
-    &lt;%= form.label :color %&gt;
-    &lt;%= form.color_field :color, required: true %&gt;
-    &lt;%= form.submit %&gt;
-  &lt;% end %&gt;
+File.write("app/views/family_members/_form.html.erb", <<~ERB)
+  <%= form_with model: family_member, class: "form-card" do |form| %>
+    <% if family_member.errors.any? %><div class="alert"><%= family_member.errors.full_messages.to_sentence %></div><% end %>
+    <%= form.label :name %>
+    <%= form.text_field :name, required: true, autofocus: true %>
+    <%= form.label :color %>
+    <%= form.color_field :color, required: true %>
+    <%= form.submit %>
+  <% end %>
 ERB
 
-File.write("app/views/family_members/new.html.erb", "&lt;h1&gt;New family member&lt;/h1&gt;\n&lt;%= render 'form', family_member: @family_member %&gt;\n")
-File.write("app/views/family_members/edit.html.erb", "&lt;h1&gt;Edit family member&lt;/h1&gt;\n&lt;%= render 'form', family_member: @family_member %&gt;\n&lt;%= button_to 'Remove family member', @family_member, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Remove this family member?' } } %&gt;\n")
+File.write("app/views/family_members/new.html.erb", "<h1>New family member</h1>\n<%= render 'form', family_member: @family_member %>\n")
+File.write("app/views/family_members/edit.html.erb", "<h1>Edit family member</h1>\n<%= render 'form', family_member: @family_member %>\n<%= button_to 'Remove family member', @family_member, method: :delete, class: 'danger', form: { data: { turbo_confirm: 'Remove this family member?' } } %>\n")
 
-File.write("app/assets/stylesheets/application.css", &lt;&lt;~CSS)
+File.write("app/assets/stylesheets/application.css", <<~CSS)
   :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f5f7fb; }
   * { box-sizing: border-box; }
   body { margin: 0; }
@@ -393,11 +393,11 @@ File.write("app/assets/stylesheets/application.css", &lt;&lt;~CSS)
   @media (max-width: 720px) { .topbar, .calendar-header { align-items: flex-start; flex-direction: column; }.topbar nav a { margin-left: .5rem; }.calendar-grid.month, .calendar-grid.week { grid-template-columns: 1fr; }.calendar-day { min-height: auto; }.calendar-day h2 { font-size: 1rem; } }
 CSS
 
-File.write("bin/docker-entrypoint", &lt;&lt;~BASH)
+File.write("bin/docker-entrypoint", <<~BASH)
   #!/bin/bash
   set -euo pipefail
 
-  if [ "${1:-}" = "./bin/rails" ] &amp;&amp; [ "${2:-}" = "server" ]; then
+  if [ "${1:-}" = "./bin/rails" ] && [ "${2:-}" = "server" ]; then
     ./bin/rails db:prepare
     ./bin/rails db:seed
   fi
@@ -407,8 +407,8 @@ BASH
 File.chmod(0o755, "bin/docker-entrypoint")
 RUBY
 
-RUN bundle install &amp;&amp; \
-    SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile &amp;&amp; \
+RUN bundle install && \
+    SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && \
     rm -rf /usr/local/bundle/cache /root/.bundle/cache
 
 FROM ruby:${RUBY_VERSION}-slim-trixie AS production
@@ -429,10 +429,10 @@ LABEL org.opencontainers.image.title="Family Calendar" \
       org.opencontainers.image.source="local"
 
 # Runtime contains only TLS certificates and SQLite's shared library.
-RUN apt-get update -qq &amp;&amp; \
-    apt-get install --no-install-recommends -y ca-certificates libsqlite3-0 &amp;&amp; \
-    rm -rf /var/lib/apt/lists/* &amp;&amp; \
-    groupadd --system --gid 1000 rails &amp;&amp; \
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y ca-certificates libsqlite3-0 && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --system --gid 1000 rails && \
     useradd --system --uid 1000 --gid rails \
       --no-create-home --shell /usr/sbin/nologin rails
 
@@ -441,9 +441,9 @@ COPY --from=build /rails /rails
 
 # Immutable code and gems. SQLite data lives in the explicitly writable
 # storage volume; tmp and log remain writable for Rails at runtime.
-RUN chmod -R go-w /rails /usr/local/bundle &amp;&amp; \
-    mkdir -p tmp/pids tmp/cache tmp/sockets log storage &amp;&amp; \
-    chown -R 1000:1000 tmp log storage &amp;&amp; \
+RUN chmod -R go-w /rails /usr/local/bundle && \
+    mkdir -p tmp/pids tmp/cache tmp/sockets log storage && \
+    chown -R 1000:1000 tmp log storage && \
     chmod -R u=rwX,g=rX,o= tmp log storage
 
 USER 1000:1000
