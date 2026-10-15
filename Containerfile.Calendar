@@ -5,7 +5,7 @@
 # Run:   podman run --rm -p "[::]:3009:3009" -v family-calendar-data:/rails/storage family-calendar
 
 ARG RUBY_VERSION=4.0.7
-ARG RAILS_VERSION=8.1.3.1
+ARG RAILS_VERSION=8.1.4
 
 FROM docker.io/ruby:${RUBY_VERSION}-slim-trixie AS build
 
