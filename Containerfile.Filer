@@ -1,0 +1,247 @@
+# change this dockerfile to implement a File Explorer like App to Browse,Create,Delete,Upload and Download Directories and Files
+# GPT 6.1-sol
+# syntax=docker/dockerfile:1
+FROM ruby:3.4-slim-trixie
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential git libyaml-dev libsqlite3-dev pkg-config tar \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash rails \
+  && mkdir -p /rails /data \
+  && chown rails:rails /rails /data
+USER rails
+WORKDIR /rails
+
+# No JavaScript toolchain is needed for this server-rendered explorer.
+RUN gem install rails --no-document \
+  && rails new demo --database=sqlite3 --skip-git --skip-docker \
+    --skip-javascript --skip-hotwire --skip-test --skip-system-test \
+    --skip-action-mailer --skip-action-mailbox --skip-action-text \
+    --skip-active-storage --skip-action-cable --skip-solid
+
+WORKDIR /rails/demo
+
+RUN <<'BUILD_APP'
+set -eu
+cat > config/routes.rb <<'RUBY'
+Rails.application.routes.draw do
+  root "explorer#index"
+  get "/browse", to: "explorer#index", as: :explorer
+  post "/entries", to: "explorer#create", as: :entries
+  delete "/entries", to: "explorer#destroy"
+  get "/download", to: "explorer#download", as: :download
+end
+RUBY
+
+cat > app/controllers/explorer_controller.rb <<'RUBY'
+require "fileutils"
+require "open3"
+
+class ExplorerController < ApplicationController
+  before_action :authenticate
+
+  rescue_from ArgumentError, SystemCallError do |error|
+    Rails.logger.warn("File explorer: #{error.class}: #{error.message}")
+    render plain: "Operation failed. Check the path, permissions, and whether the entry already exists.",
+           status: :unprocessable_entity
+  end
+
+  def index
+    @directory = resolve_path(params[:path])
+    raise ArgumentError unless @directory.directory?
+
+    @path = relative_path(@directory)
+    @parent = relative_path(@directory.parent) unless @directory == storage_root
+    @entries = @directory.children.reject(&:symlink?).sort_by do |entry|
+      [entry.directory? ? 0 : 1, entry.basename.to_s.downcase]
+    end
+  end
+
+  def create
+    directory = resolve_path(params[:path])
+    raise ArgumentError unless directory.directory?
+
+    if params[:kind] == "upload"
+      uploads = Array(params[:files]).reject(&:blank?)
+      raise ArgumentError if uploads.empty?
+
+      uploads.each do |upload|
+        target = directory.join(valid_name(upload.original_filename))
+        File.open(target, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
+          IO.copy_stream(upload.tempfile, file)
+        end
+      end
+    else
+      target = directory.join(valid_name(params[:name]))
+      case params[:kind]
+      when "directory"
+        Dir.mkdir(target, 0o700)
+      when "file"
+        File.open(target, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
+          file.write(params[:content].to_s)
+        end
+      else
+        raise ArgumentError
+      end
+    end
+
+    redirect_to explorer_path(path: relative_path(directory)), notice: "Created successfully.", status: :see_other
+  end
+
+  def destroy
+    target = resolve_path(params[:path])
+    raise ArgumentError if target == storage_root
+
+    parent = relative_path(target.parent)
+    FileUtils.remove_entry(target.to_s)
+    redirect_to explorer_path(path: parent), notice: "Deleted successfully.", status: :see_other
+  end
+
+  def download
+    target = resolve_path(params[:path])
+    if target.directory?
+      # tar does not follow symlinks; argv arguments avoid shell injection.
+      archive, _error, status = Open3.capture3("tar", "-czf", "-", "--", ".", chdir: target.to_s)
+      raise ArgumentError unless status.success?
+
+      name = target == storage_root ? "files" : target.basename.to_s
+      send_data archive, filename: "#{name}.tar.gz", type: "application/gzip", disposition: "attachment"
+    else
+      raise ArgumentError unless target.file?
+
+      send_file target.to_s, filename: target.basename.to_s,
+                type: "application/octet-stream", disposition: "attachment"
+    end
+  end
+
+  private
+
+  def authenticate
+    password = ENV["FILE_EXPLORER_PASSWORD"]
+    if password.blank?
+      render plain: "Set FILE_EXPLORER_PASSWORD to enable the explorer.", status: :service_unavailable
+      return
+    end
+
+    authenticate_or_request_with_http_basic("File Explorer") do |user, supplied_password|
+      ActiveSupport::SecurityUtils.secure_compare(user, ENV.fetch("FILE_EXPLORER_USER", "rails")) &
+        ActiveSupport::SecurityUtils.secure_compare(supplied_password, password)
+    end
+  end
+
+  def storage_root
+    @storage_root ||= Pathname.new(ENV.fetch("FILE_EXPLORER_ROOT", "/data")).realpath
+  end
+
+  def resolve_path(value)
+    candidate = storage_root.join(value.to_s).cleanpath
+    raise ArgumentError if candidate.symlink?
+
+    resolved = candidate.realpath
+    unless resolved == storage_root || resolved.to_s.start_with?("#{storage_root}/")
+      raise ArgumentError
+    end
+    raise ArgumentError unless resolved.file? || resolved.directory?
+
+    resolved
+  end
+
+  def relative_path(path)
+    path.relative_path_from(storage_root).to_s
+  end
+
+  def valid_name(value)
+    name = value.to_s
+    if name.blank? || [".", ".."].include?(name) || name.match?(/[\\\/\x00-\x1f\x7f]/)
+      raise ArgumentError
+    end
+    name
+  end
+end
+RUBY
+
+mkdir -p app/views/explorer
+cat > app/views/explorer/index.html.erb <<'ERB'
+<style>
+  body { font: 16px system-ui, sans-serif; margin: 2rem auto; padding: 0 1rem; max-width: 1100px; color: #202830; }
+  a { color: #0759b5; } table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .75rem; border-bottom: 1px solid #ddd; overflow-wrap: anywhere; }
+  fieldset { margin: 1.5rem 0; border: 1px solid #ccc; border-radius: .4rem; }
+  input, select, textarea, button { font: inherit; padding: .4rem; margin: .25rem; max-width: 100%; box-sizing: border-box; }
+  textarea { display: block; width: 95%; } .notice { color: #176529; }
+  .actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+</style>
+
+<h1>File Explorer</h1>
+<p class="notice" role="status"><%= notice %></p>
+<nav>
+  <%= link_to "Home", root_path %> / <strong><%= @path %></strong>
+  <% if @parent %> · <%= link_to "Up one directory", explorer_path(path: @parent) %><% end %>
+  · <%= link_to "Download this directory (.tar.gz)", download_path(path: @path) %>
+</nav>
+
+<fieldset>
+  <legend>Create a file or directory</legend>
+  <%= form_with url: entries_path, local: true do |form| %>
+    <%= form.hidden_field :path, value: @path %>
+    <%= form.label :kind, "Type" %>
+    <%= form.select :kind, [["File", "file"], ["Directory", "directory"]] %>
+    <%= form.label :name, "Name" %>
+    <%= form.text_field :name, required: true %>
+    <%= form.label :content, "File contents (ignored for directories)" %>
+    <%= form.text_area :content, rows: 4 %>
+    <%= form.submit "Create" %>
+  <% end %>
+</fieldset>
+
+<fieldset>
+  <legend>Upload files</legend>
+  <%= form_with url: entries_path, multipart: true, local: true do |form| %>
+    <%= form.hidden_field :path, value: @path %>
+    <%= form.hidden_field :kind, value: "upload" %>
+    <%= form.label :files, "Choose files" %>
+    <%= form.file_field :files, multiple: true, required: true %>
+    <%= form.submit "Upload" %>
+  <% end %>
+  <p>Existing files are never overwritten.</p>
+</fieldset>
+
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Actions</th></tr></thead>
+  <tbody>
+    <% @entries.each do |entry| %>
+      <% path = entry.relative_path_from(@directory).to_s %>
+      <% relative = @path == "." ? path : "#{@path}/#{path}" %>
+      <tr>
+        <td>
+          <% if entry.directory? %>
+            <%= link_to entry.basename.to_s, explorer_path(path: relative) %>
+          <% else %>
+            <%= entry.basename.to_s %>
+          <% end %>
+        </td>
+        <td><%= entry.directory? ? "Directory" : "File" %></td>
+        <td><%= entry.file? ? number_to_human_size(entry.size) : "—" %></td>
+        <td class="actions">
+          <%= link_to "Download", download_path(path: relative) %>
+          <%= button_to "Delete", entries_path(path: relative), method: :delete,
+                form: { onsubmit: "return confirm('Permanently delete this entry and all its contents?');" } %>
+        </td>
+      </tr>
+    <% end %>
+    <% if @entries.empty? %><tr><td colspan="4">This directory is empty.</td></tr><% end %>
+  </tbody>
+</table>
+ERB
+BUILD_APP
+
+ENV RAILS_ENV=development \
+    FILE_EXPLORER_ROOT=/data
+VOLUME ["/data"]
+EXPOSE 3000
+
+# Supply -e FILE_EXPLORER_PASSWORD=... at runtime; the username is rails.
+# Persist files with -v explorer-data:/data. Use HTTPS when exposing the app.
+CMD ["bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]
