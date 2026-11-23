@@ -57,7 +57,7 @@ RUN bundle init \
   && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
   && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
   && echo '<div class="text-muted small mt-3"><p>IP: <%= request.ip %></p><p>User Agent: <%= request.user_agent %></p><p>Method: <%= request.method %> Path: <%= request.path %></p></div>' >> app/views/welcome/index.html.erb \
-  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Bundler::VERSION %> <%= Rails.version %> <%= Puma::Const::VERSION %> -->/g' app/views/layouts/application.html.erb \
+  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Bundler::VERSION %> <%= Rails.version %> <%= Rack.release %> <%= Puma::Const::VERSION %> -->/g' app/views/layouts/application.html.erb \
   && bundle exec rails assets:precompile
 
 # new stage for Rails app
