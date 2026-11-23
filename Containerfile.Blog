@@ -8,7 +8,7 @@ RUN bundle exec rails new . --force --skip-git --database=mysql --javascript=esb
   && sed -i 's/host:.*/host: <%= ENV.fetch("DB_HOST") { "localhost" } %>\n  port: <%= ENV.fetch("DB_PORT") { 3306 } %>/g' config/database.yml \
   && bundle exec rails generate scaffold blog title:string content:text \
   && sed -i 's/# root/root to: "blogs#index"\n  # root/g' config/routes.rb \
-  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Rails.version %> -->/g' app/views/layouts/application.html.erb \
+  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Bundler::VERSION %> <%= Rails.version %> <%= Rack.release %> <%= Puma::Const::VERSION %> -->/g' app/views/layouts/application.html.erb \
   && RAILS_ENV=production bundle exec rails db:migrate \
   && bundle exec rails assets:precompile
 
