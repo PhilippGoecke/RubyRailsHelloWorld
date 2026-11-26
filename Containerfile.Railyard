@@ -294,8 +294,11 @@ ENV REGISTRY_PASSWORD=changeme
 # registry image data
 VOLUME /rails/demo/storage
 
+RUN mkdir config/certificates \
+  && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -days 365
+
 EXPOSE 5000
 
-HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:5000/up || exit 1
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --insecure --fail https://localhost:5000/up || exit 1
 
-CMD ["bundle", "exec", "rails", "server", "-b", "[::]", "-p", "5000"]
+CMD ["bundle", "exec", "rails", "server", "-b", "ssl://[::]:3000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt&ca=config/certificates/localhost.crt&verify_mode=none&ssl_min_version=TLS1_2_VERSION&ssl_max_version=TLS1_3_VERSION"]
