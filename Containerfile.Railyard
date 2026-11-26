@@ -266,8 +266,8 @@ FROM debian:trixie-slim as rails
 # install dependencies
 RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
-  && apt install -y --no-install-recommends --no-install-suggests curl \
-  && rm -rf "/var/lib/apt/lists/*" \
+  && apt install -y --no-install-recommends --no-install-suggests curl openssl \
+  && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives
 
 # add user and set home directory
@@ -278,9 +278,9 @@ WORKDIR $HOME
 USER $USER
 
 # copy rbenv, Ruby and Rails App from install stage
-COPY --from=install $HOME/.rbenv $HOME/.rbenv
+COPY --from=install --chown=$USER:$USER $HOME/.rbenv $HOME/.rbenv
 ENV PATH="$HOME/.rbenv/shims:$PATH"
-COPY --from=install /rails/demo /rails/demo
+COPY --from=install --chown=$USER:$USER /rails/demo /rails/demo
 
 WORKDIR /rails/demo
 
@@ -301,4 +301,4 @@ EXPOSE 5000
 
 HEALTHCHECK --interval=35s --timeout=4s CMD curl --insecure --fail https://localhost:5000/up || exit 1
 
-CMD ["bundle", "exec", "rails", "server", "-b", "ssl://[::]:5000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt&ca=config/certificates/localhost.crt&verify_mode=none&ssl_min_version=TLS1_2_VERSION&ssl_max_version=TLS1_3_VERSION"]
+CMD ["bundle", "exec", "puma", "-b", "ssl://[::]:5000?key=config/certificates/localhost.key&cert=config/certificates/localhost.crt&ca=config/certificates/localhost.crt&verify_mode=none&ssl_min_version=TLS1_2_VERSION&ssl_max_version=TLS1_3_VERSION"]
