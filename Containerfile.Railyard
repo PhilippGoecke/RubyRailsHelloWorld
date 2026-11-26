@@ -74,11 +74,9 @@ Rails.application.routes.draw do
   patch "/v2/*name/blobs/uploads/:uuid", to: "registry#patch_upload", format: false
   put "/v2/*name/blobs/uploads/:uuid", to: "registry#finish_upload", format: false
   get "/v2/*name/blobs/:digest", to: "registry#show_blob", format: false
-  head "/v2/*name/blobs/:digest", to: "registry#show_blob", format: false
   delete "/v2/*name/blobs/:digest", to: "registry#delete_blob", format: false
   put "/v2/*name/manifests/:reference", to: "registry#put_manifest", format: false
   get "/v2/*name/manifests/:reference", to: "registry#show_manifest", format: false
-  head "/v2/*name/manifests/:reference", to: "registry#show_manifest", format: false
   delete "/v2/*name/manifests/:reference", to: "registry#delete_manifest", format: false
   get "/v2/*name/tags/list", to: "registry#tags", format: false
 end
@@ -296,8 +294,8 @@ ENV REGISTRY_PASSWORD=changeme
 # registry image data
 VOLUME /rails/demo/storage
 
-EXPOSE 3000
+EXPOSE 5000
 
-HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:3000/up || exit 1
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:5000/up || exit 1
 
-CMD ["bundle", "exec", "rails", "server", "-b", "[::]", "-p", "3000"]
+CMD ["bundle", "exec", "rails", "server", "-b", "[::]", "-p", "5000"]
