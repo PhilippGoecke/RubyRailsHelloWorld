@@ -295,7 +295,7 @@ ENV REGISTRY_PASSWORD=changeme
 VOLUME /rails/demo/storage
 
 RUN mkdir config/certificates \
-  && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -days 365
+  && openssl req -x509 -sha256 -nodes -newkey rsa:4096 -keyout config/certificates/localhost.key -out config/certificates/localhost.crt -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" -days 365
 
 EXPOSE 5000
 
