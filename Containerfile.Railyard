@@ -1,0 +1,303 @@
+# syntax=docker/dockerfile:1
+FROM debian:trixie-slim as install
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+#SHELL ["/bin/bash", "-c"]
+RUN rm /bin/sh \
+  && ln -s /bin/bash /bin/sh
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests ca-certificates git curl libyaml-dev build-essential libssl-dev zlib1g-dev \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# install Ruby, Node.js, Yarn
+ENV NODE_VERSION=26.13.1
+RUN git clone --depth 1 https://github.com/nvm-sh/nvm.git ~/.nvm \
+  && cd .nvm \
+  && . $HOME/.nvm/nvm.sh \
+  && nvm --version \
+  && nvm install $NODE_VERSION \
+  && npm --version \
+  && npm install --global yarn \
+  && which yarn \
+  && yarn --version
+ENV PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/:$PATH"
+
+# install Ruby using rbenv
+ENV RUBY_CONFIGURE_OPTS="--disable-install-rdoc"
+ENV PATH="$HOME/.rbenv/bin:$PATH"
+RUN git clone --depth 1 https://github.com/rbenv/rbenv.git ~/.rbenv \
+  && ~/.rbenv/bin/rbenv init \
+  && rbenv --version \
+  && mkdir "$(rbenv root)"/plugins/ \
+  && git clone --depth 1 https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build \
+  && rbenv install 4.0.10 \
+  && rbenv global 4.0.10
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+
+WORKDIR /rails/demo
+
+# install Rails and initialize a new Rails app
+RUN bundle init \
+  && bundle add rails --version "~> 8.1.4" \
+  && bundle update --bundler \
+  && bundle exec rails new . --force --skip-git --database=sqlite3 --javascript=esbuild --css=bootstrap --asset-pipeline=propshaft \
+  && sed -i 's/allow_browser/# allow_browser/g' app/controllers/application_controller.rb \
+  && bundle exec rails generate controller welcome index \
+  && sed -i 's/# root/root to: "welcome#index"\n  # root/g' config/routes.rb \
+  && sed -i '/def index/a \ \ \ \ @name = params[:name] || "World"' app/controllers/welcome_controller.rb \
+  && echo '<div class="d-flex justify-content-center align-items-center vh-100"><h1 class="text-primary text-center">Hello <%= @name %>!</h1></div>' > app/views/welcome/index.html.erb \
+  && echo '<div class="text-muted small mt-3"><p>IP: <%= request.ip %></p><p>User Agent: <%= request.user_agent %></p><p>Method: <%= request.method %> Path: <%= request.path %></p></div>' >> app/views/welcome/index.html.erb \
+  && sed -i 's/<body>/<body>\n  <!-- <%= RUBY_VERSION %> <%= Bundler::VERSION %> <%= Rails.version %> <%= Rack.release %> <%= Puma::Const::VERSION %> -->/g' app/views/layouts/application.html.erb \
+  && bundle exec rails assets:precompile
+
+# container registry (OCI Distribution API): routes + controller
+COPY --chown=rails:rails <<'EOF' config/routes.rb
+Rails.application.routes.draw do
+  get "up" => "rails/health#show", as: :rails_health_check
+  root to: "welcome#index"
+
+  get "/v2", to: "registry#base", format: false
+  get "/v2/", to: "registry#base", format: false
+  get "/v2/_catalog", to: "registry#catalog", format: false
+  post "/v2/*name/blobs/uploads", to: "registry#start_upload", format: false
+  patch "/v2/*name/blobs/uploads/:uuid", to: "registry#patch_upload", format: false
+  put "/v2/*name/blobs/uploads/:uuid", to: "registry#finish_upload", format: false
+  get "/v2/*name/blobs/:digest", to: "registry#show_blob", format: false
+  head "/v2/*name/blobs/:digest", to: "registry#show_blob", format: false
+  delete "/v2/*name/blobs/:digest", to: "registry#delete_blob", format: false
+  put "/v2/*name/manifests/:reference", to: "registry#put_manifest", format: false
+  get "/v2/*name/manifests/:reference", to: "registry#show_manifest", format: false
+  head "/v2/*name/manifests/:reference", to: "registry#show_manifest", format: false
+  delete "/v2/*name/manifests/:reference", to: "registry#delete_manifest", format: false
+  get "/v2/*name/tags/list", to: "registry#tags", format: false
+end
+EOF
+
+COPY --chown=rails:rails <<'EOF' app/controllers/registry_controller.rb
+require "digest"
+require "fileutils"
+
+class RegistryController < ApplicationController
+  skip_forgery_protection
+  before_action :set_headers
+  before_action :authenticate!, except: %i[base catalog show_blob show_manifest tags]
+  before_action :validate_name, if: -> { params[:name].present? }
+
+  ROOT = Rails.root.join("storage", "registry")
+  NAME_RE = %r{\A[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*\z}
+  DIGEST_RE = /\Asha256:[a-f0-9]{64}\z/
+  REF_RE = /\A[A-Za-z0-9_][A-Za-z0-9._-]{0,127}\z/
+
+  def base
+    head :ok
+  end
+
+  def catalog
+    repos = Dir.glob(ROOT.join("repos", "**", "tags")).map { |p| p.delete_prefix(ROOT.join("repos").to_s + "/").delete_suffix("/tags") }
+    render json: { repositories: repos.sort }
+  end
+
+  # --- blobs ---
+  def start_upload
+    uuid = SecureRandom.uuid
+    FileUtils.mkdir_p(ROOT.join("uploads"))
+    FileUtils.touch(upload_path(uuid))
+    response.headers["Location"] = "/v2/#{params[:name]}/blobs/uploads/#{uuid}"
+    response.headers["Docker-Upload-UUID"] = uuid
+    response.headers["Range"] = "0-0"
+    head :accepted
+  end
+
+  def patch_upload
+    path = upload_path(params[:uuid])
+    return registry_error(404, "BLOB_UPLOAD_UNKNOWN") unless File.exist?(path)
+    File.open(path, "ab") { |f| f.write(request.body.read) }
+    response.headers["Location"] = "/v2/#{params[:name]}/blobs/uploads/#{params[:uuid]}"
+    response.headers["Range"] = "0-#{[File.size(path) - 1, 0].max}"
+    head :accepted
+  end
+
+  def finish_upload
+    path = upload_path(params[:uuid])
+    return registry_error(404, "BLOB_UPLOAD_UNKNOWN") unless File.exist?(path)
+    File.open(path, "ab") { |f| f.write(request.body.read) }
+    digest = params[:digest].to_s
+    actual = "sha256:#{Digest::SHA256.file(path).hexdigest}"
+    return registry_error(400, "DIGEST_INVALID") unless digest.match?(DIGEST_RE) && digest == actual
+    FileUtils.mkdir_p(ROOT.join("blobs"))
+    FileUtils.mv(path, blob_path(digest))
+    response.headers["Location"] = "/v2/#{params[:name]}/blobs/#{digest}"
+    response.headers["Docker-Content-Digest"] = digest
+    head :created
+  end
+
+  def show_blob
+    return registry_error(400, "DIGEST_INVALID") unless params[:digest].match?(DIGEST_RE)
+    path = blob_path(params[:digest])
+    return registry_error(404, "BLOB_UNKNOWN") unless File.exist?(path)
+    response.headers["Docker-Content-Digest"] = params[:digest]
+    if request.head?
+      response.headers["Content-Length"] = File.size(path).to_s
+      head :ok
+    else
+      send_file path, type: "application/octet-stream", disposition: "inline"
+    end
+  end
+
+  def delete_blob
+    return registry_error(400, "DIGEST_INVALID") unless params[:digest].match?(DIGEST_RE)
+    path = blob_path(params[:digest])
+    return registry_error(404, "BLOB_UNKNOWN") unless File.exist?(path)
+    File.delete(path)
+    head :accepted
+  end
+
+  # --- manifests ---
+  def put_manifest
+    ref = params[:reference]
+    return registry_error(400, "MANIFEST_INVALID") unless ref.match?(REF_RE) || ref.match?(DIGEST_RE)
+    body = request.body.read
+    digest = "sha256:#{Digest::SHA256.hexdigest(body)}"
+    return registry_error(400, "DIGEST_INVALID") if ref.match?(DIGEST_RE) && ref != digest
+    FileUtils.mkdir_p(repo_dir.join("manifests"))
+    FileUtils.mkdir_p(repo_dir.join("tags"))
+    File.binwrite(repo_dir.join("manifests", digest.delete(":")), body)
+    File.write(repo_dir.join("manifests", digest.delete(":") + ".type"), request.content_type.presence || "application/vnd.oci.image.manifest.v1+json")
+    File.write(repo_dir.join("tags", ref), digest) unless ref.match?(DIGEST_RE)
+    response.headers["Location"] = "/v2/#{params[:name]}/manifests/#{digest}"
+    response.headers["Docker-Content-Digest"] = digest
+    head :created
+  end
+
+  def show_manifest
+    digest = resolve_reference
+    return registry_error(404, "MANIFEST_UNKNOWN") unless digest
+    file = repo_dir.join("manifests", digest.delete(":"))
+    return registry_error(404, "MANIFEST_UNKNOWN") unless File.exist?(file)
+    type = File.read("#{file}.type") rescue "application/vnd.oci.image.manifest.v1+json"
+    response.headers["Docker-Content-Digest"] = digest
+    if request.head?
+      response.headers["Content-Type"] = type
+      response.headers["Content-Length"] = File.size(file).to_s
+      head :ok
+    else
+      send_data File.binread(file), type: type, disposition: "inline"
+    end
+  end
+
+  def delete_manifest
+    digest = resolve_reference
+    return registry_error(404, "MANIFEST_UNKNOWN") unless digest
+    file = repo_dir.join("manifests", digest.delete(":"))
+    return registry_error(404, "MANIFEST_UNKNOWN") unless File.exist?(file)
+    File.delete(file)
+    File.delete("#{file}.type") if File.exist?("#{file}.type")
+    Dir.glob(repo_dir.join("tags", "*")).each { |t| File.delete(t) if File.read(t) == digest }
+    head :accepted
+  end
+
+  def tags
+    dir = repo_dir.join("tags")
+    return registry_error(404, "NAME_UNKNOWN") unless Dir.exist?(dir)
+    render json: { name: params[:name], tags: Dir.children(dir).sort }
+  end
+
+  private
+
+  def set_headers
+    response.headers["Docker-Distribution-API-Version"] = "registry/2.0"
+  end
+
+  # Push/delete require basic auth (REGISTRY_USER / REGISTRY_PASSWORD); pull is public.
+  def authenticate!
+    user = ENV.fetch("REGISTRY_USER", "admin")
+    pass = ENV.fetch("REGISTRY_PASSWORD", "changeme")
+    ok = authenticate_with_http_basic do |u, p|
+      ActiveSupport::SecurityUtils.secure_compare(u, user) & ActiveSupport::SecurityUtils.secure_compare(p, pass)
+    end
+    return if ok
+    response.headers["WWW-Authenticate"] = 'Basic realm="Registry"'
+    registry_error(401, "UNAUTHORIZED")
+  end
+
+  def validate_name
+    registry_error(400, "NAME_INVALID") unless params[:name].match?(NAME_RE)
+  end
+
+  def repo_dir
+    ROOT.join("repos", params[:name])
+  end
+
+  def upload_path(uuid)
+    raise ActionController::BadRequest unless uuid.to_s.match?(/\A[a-f0-9-]{36}\z/)
+    ROOT.join("uploads", uuid)
+  end
+
+  def blob_path(digest)
+    ROOT.join("blobs", digest.delete(":"))
+  end
+
+  def resolve_reference
+    ref = params[:reference]
+    return ref if ref.match?(DIGEST_RE)
+    return nil unless ref.match?(REF_RE)
+    tag = repo_dir.join("tags", ref)
+    File.exist?(tag) ? File.read(tag) : nil
+  end
+
+  def registry_error(status, code)
+    render json: { errors: [{ code: code, message: code.downcase.tr("_", " ") }] }, status: status
+  end
+end
+EOF
+
+# new stage for Rails app
+FROM debian:trixie-slim as rails
+
+# install dependencies
+RUN apt update && apt upgrade -y \
+  && apt install -y --no-install-recommends --no-install-suggests libyaml-dev libssl-dev \
+  && apt install -y --no-install-recommends --no-install-suggests curl \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+# add user and set home directory
+ARG USER=rails
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR $HOME
+USER $USER
+
+# copy rbenv, Ruby and Rails App from install stage
+COPY --from=install $HOME/.rbenv $HOME/.rbenv
+ENV PATH="$HOME/.rbenv/shims:$PATH"
+COPY --from=install /rails/demo /rails/demo
+
+WORKDIR /rails/demo
+
+RUN mkdir -p tmp/sockets tmp/pids tmp/cache log storage
+
+ENV RAILS_ENV=production
+ENV REGISTRY_USER=admin
+# override REGISTRY_PASSWORD at runtime
+ENV REGISTRY_PASSWORD=changeme
+
+# registry image data
+VOLUME /rails/demo/storage
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=35s --timeout=4s CMD curl --fail http://localhost:3000/up || exit 1
+
+CMD ["bundle", "exec", "rails", "server", "-b", "[::]", "-p", "3000"]
